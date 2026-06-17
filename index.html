@@ -3,55 +3,81 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hitster Bingo</title>
+  <title>Hitster Bingo Spotify</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://sdk.scdn.co/spotify-player.js"></script>
 </head>
 <body>
 <div class="app">
   <header>
     <h1>🎵 Hitster Bingo</h1>
-    <p>Vul categorieën in, start een ronde en speel blind een Spotify-nummer.</p>
+    <p>Kleurenkiezer + Spotify muziekronde</p>
   </header>
 
   <section class="panel">
-    <h2>1. Categorieën</h2>
+    <h2>1. Spotify</h2>
+    <div class="spotifyRow">
+      <button id="loginBtn">🔐 Login met Spotify</button>
+      <button id="logoutBtn" class="secondary">Uitloggen</button>
+    </div>
+    <p id="loginStatus" class="small">Nog niet ingelogd.</p>
+    <button id="activateBtn" disabled>▶️ Activeer Spotify-speler</button>
+    <p class="small">Laat deze pagina open staan. Op iPhone moet je soms eerst op deze knop tikken voordat audio mag starten.</p>
+  </section>
+
+  <section class="panel">
+    <h2>2. Playlist</h2>
+    <input id="playlistInput" placeholder="Plak Spotify playlist link of playlist ID">
+    <button id="loadPlaylistBtn" class="secondary">📥 Playlist laden</button>
+    <p id="playlistStatus" class="small">Nog geen playlist geladen.</p>
+  </section>
+
+  <section class="panel">
+    <h2>3. Categorieën</h2>
     <div class="categories">
-      <label class="yellow">🟨 Geel <input id="cat-yellow" value="Jaren 80"></label>
-      <label class="pink">🩷 Roze <input id="cat-pink" value="Vrouwelijke artiest"></label>
-      <label class="purple">🟪 Paars <input id="cat-purple" value="Nederlandse artiest"></label>
-      <label class="blue">🟦 Blauw <input id="cat-blue" value="Dance"></label>
-      <label class="green">🟩 Groen <input id="cat-green" value="Nummer 1-hit"></label>
+      <label><span>🟨 Geel</span><input id="cat-yellow" value="Jaren 80"></label>
+      <label><span>🩷 Roze</span><input id="cat-pink" value="Vrouwelijke artiest"></label>
+      <label><span>🟪 Paars</span><input id="cat-purple" value="Nederlandse artiest"></label>
+      <label><span>🟦 Blauw</span><input id="cat-blue" value="Dance"></label>
+      <label><span>🟩 Groen</span><input id="cat-green" value="Nummer 1-hit"></label>
     </div>
   </section>
 
   <section class="panel">
-    <h2>2. Muziek</h2>
-    <p class="small">Prototype: plak Spotify-links handmatig in de lijst. In de echte Spotify-versie kan dit automatisch via je playlist.</p>
-    <textarea id="tracks" rows="7" placeholder="Plak Spotify track links, 1 per regel..."></textarea>
+    <h2>4. Instellingen</h2>
     <div class="settings">
-      <label>Fragment:
+      <label>Fragment
         <select id="duration">
-          <option value="5">5 sec</option>
-          <option value="10">10 sec</option>
-          <option value="20" selected>20 sec</option>
-          <option value="30">30 sec</option>
+          <option value="5">5 seconden</option>
+          <option value="10">10 seconden</option>
+          <option value="20" selected>20 seconden</option>
+          <option value="30">30 seconden</option>
         </select>
       </label>
-      <label><input type="checkbox" id="bonus" checked> Bonusrondes aan</label>
+      <label><input type="checkbox" id="randomStart" checked> Random startpunt</label>
       <label><input type="checkbox" id="noRepeat" checked> Geen herhaling</label>
+      <label><input type="checkbox" id="bonusOn" checked> Bonusrondes</label>
     </div>
   </section>
 
-  <section class="stage panel">
-    <button id="start">🎲 Start ronde</button>
-    <div id="round">
-      <div class="placeholder">Nog geen ronde gestart</div>
+  <section class="panel stage">
+    <button id="startBtn">🎲 START RONDE</button>
+
+    <div id="pickerArea">
+      <div class="intro">
+        <div class="bigEmoji">🪩</div>
+        <h2>Klaar om te spelen</h2>
+        <p>Login, laad playlist en start een ronde.</p>
+      </div>
     </div>
-    <div class="actions">
-      <button id="play" disabled>▶️ Speel verborgen nummer</button>
-      <button id="answer" disabled>✅ Toon antwoord</button>
+
+    <div class="gameButtons">
+      <button id="playBtn" disabled>🎵 Speel verborgen nummer</button>
+      <button id="stopBtn" disabled class="secondary">⏹ Stop</button>
+      <button id="answerBtn" disabled>✅ Toon antwoord</button>
     </div>
-    <div id="spotifyBox" class="hidden"></div>
+
+    <div id="answerArea"></div>
   </section>
 </div>
 
