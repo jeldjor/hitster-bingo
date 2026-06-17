@@ -1,5 +1,5 @@
 const CLIENT_ID = "4765b89201b44558a7d5141f9b93c178";
-const REDIRECT_URI = "https://jeldjor.github.io/hitster-bingo/";
+const REDIRECT_URI = window.location.origin + window.location.pathname;
 const SCOPES = [
   "streaming",
   "user-read-email",
@@ -26,6 +26,17 @@ let currentTrack = null;
 let stopTimer = null;
 
 function $(id){ return document.getElementById(id); }
+function showError(msg){
+  console.error(msg);
+  let box = document.getElementById("debugError");
+  if(!box){
+    box = document.createElement("div");
+    box.id = "debugError";
+    box.style.cssText = "background:#ffdddd;color:#200;padding:14px;border-radius:14px;margin:12px 0;font-weight:bold;white-space:pre-wrap;text-align:left;";
+    document.querySelector(".app").prepend(box);
+  }
+  box.textContent = "Foutmelding:\n" + msg;
+}
 function pick(list){ return list[Math.floor(Math.random() * list.length)]; }
 
 function parseCSV(text){
@@ -155,26 +166,46 @@ async function login(){
 async function handleRedirect(){
   const params = new URLSearchParams(window.location.search);
   const code = params.get("code");
+  const error = params.get("error");
+  if(error){
+    showError("Spotify stuurde een error terug: " + error);
+    return;
+  }
   if(!code) return;
+
   const verifier = localStorage.getItem("spotify_code_verifier");
-  const body = new URLSearchParams({
-    client_id:CLIENT_ID,
-    grant_type:"authorization_code",
-    code,
-    redirect_uri:REDIRECT_URI,
-    code_verifier:verifier
-  });
-  const res = await fetch("https://accounts.spotify.com/api/token", {
-    method:"POST",
-    headers:{"Content-Type":"application/x-www-form-urlencoded"},
-    body
-  });
-  const data = await res.json();
-  if(data.access_token){
-    saveTokens(data);
-    history.replaceState({}, document.title, REDIRECT_URI);
-  } else {
-    alert("Spotify login mislukt: " + JSON.stringify(data));
+  if(!verifier){
+    showError("Geen code_verifier gevonden. Klik opnieuw op 'Login met Spotify' vanaf dezelfde Safari-browser.");
+    return;
+  }
+
+  try{
+    const body = new URLSearchParams({
+      client_id:CLIENT_ID,
+      grant_type:"authorization_code",
+      code,
+      redirect_uri:REDIRECT_URI,
+      code_verifier:verifier
+    });
+    const res = await fetch("https://accounts.spotify.com/api/token", {
+      method:"POST",
+      headers:{"Content-Type":"application/x-www-form-urlencoded"},
+      body
+    });
+    const text = await res.text();
+    let data = {};
+    try{ data = JSON.parse(text); }catch(e){ data = {raw:text}; }
+
+    if(data.access_token){
+      saveTokens(data);
+      localStorage.removeItem("spotify_code_verifier");
+      history.replaceState({}, document.title, REDIRECT_URI);
+      await updateStatus();
+    } else {
+      showError("Spotify token ophalen mislukt.\nStatus: " + res.status + "\nAntwoord: " + JSON.stringify(data, null, 2) + "\nRedirect gebruikt: " + REDIRECT_URI);
+    }
+  }catch(e){
+    showError("Technische loginfout: " + e.message + "\nRedirect gebruikt: " + REDIRECT_URI);
   }
 }
 function saveTokens(data){
@@ -381,4 +412,4 @@ $("playBtn").addEventListener("click", playHidden);
 $("stopBtn").addEventListener("click", stopPlayback);
 $("answerBtn").addEventListener("click", showAnswer);
 
-handleRedirect().then(updateStatus);
+handleRedirect().then(updateStatus).catch(e => showError(e.message));
