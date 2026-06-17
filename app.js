@@ -4,8 +4,6 @@ const SCOPES = [
   "streaming",
   "user-read-email",
   "user-read-private",
-  "playlist-read-private",
-  "playlist-read-collaborative",
   "user-read-playback-state",
   "user-modify-playback-state"
 ].join(" ");
@@ -23,12 +21,110 @@ let refreshToken = localStorage.getItem("spotify_refresh_token") || "";
 let expiresAt = Number(localStorage.getItem("spotify_expires_at") || "0");
 let player = null;
 let deviceId = "";
-let tracks = JSON.parse(localStorage.getItem("hb_tracks") || "[]");
+let tracks = JSON.parse(localStorage.getItem("hb_csv_tracks") || "[]");
 let currentTrack = null;
 let stopTimer = null;
 
 function $(id){ return document.getElementById(id); }
 function pick(list){ return list[Math.floor(Math.random() * list.length)]; }
+
+function parseCSV(text){
+  const rows = [];
+  let row = [], cell = "", inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i], n = text[i+1];
+    if(c === '"' && inQuotes && n === '"'){ cell += '"'; i++; }
+    else if(c === '"'){ inQuotes = !inQuotes; }
+    else if(c === "," && !inQuotes){ row.push(cell); cell = ""; }
+    else if((c === "\n" || c === "\r") && !inQuotes){
+      if(c === "\r" && n === "\n") i++;
+      row.push(cell); cell = "";
+      if(row.some(v => v.trim() !== "")) rows.push(row);
+      row = [];
+    } else cell += c;
+  }
+  row.push(cell);
+  if(row.some(v => v.trim() !== "")) rows.push(row);
+  return rows;
+}
+
+function normaliseHeader(h){
+  return h.toLowerCase().replace(/[^a-z0-9]/g,"");
+}
+
+function findIndex(headers, names){
+  const norm = headers.map(normaliseHeader);
+  for(const name of names){
+    const idx = norm.indexOf(normaliseHeader(name));
+    if(idx >= 0) return idx;
+  }
+  return -1;
+}
+
+function trackUriToId(uri){
+  if(!uri) return "";
+  const s = uri.trim();
+  const m1 = s.match(/spotify:track:([a-zA-Z0-9]+)/);
+  if(m1) return m1[1];
+  const m2 = s.match(/track\/([a-zA-Z0-9]+)/);
+  if(m2) return m2[1];
+  if(/^[a-zA-Z0-9]{15,}$/.test(s)) return s;
+  return "";
+}
+
+function loadCsvText(text){
+  const rows = parseCSV(text);
+  if(rows.length < 2) throw new Error("CSV lijkt leeg.");
+  const headers = rows[0];
+
+  const uriI = findIndex(headers, ["Track URI","Spotify URI","Track URL","Spotify Track URI","URI"]);
+  const titleI = findIndex(headers, ["Track Name","Name","Title","Track"]);
+  const artistI = findIndex(headers, ["Artist Name(s)","Artist Names","Artist Name","Artists","Artist"]);
+  const albumI = findIndex(headers, ["Album Name","Album"]);
+  const releaseI = findIndex(headers, ["Release Date","Release"]);
+  const durationI = findIndex(headers, ["Duration (ms)","Duration_ms","Duration MS","Duration"]);
+
+  if(uriI < 0) throw new Error("Geen kolom gevonden voor Track URI.");
+  if(titleI < 0) throw new Error("Geen kolom gevonden voor Track Name.");
+  if(artistI < 0) throw new Error("Geen kolom gevonden voor Artist Name(s).");
+
+  const out = [];
+  const seen = new Set();
+
+  for(let r=1;r<rows.length;r++){
+    const row = rows[r];
+    const id = trackUriToId(row[uriI] || "");
+    if(!id || seen.has(id)) continue;
+    seen.add(id);
+    const durationRaw = durationI >= 0 ? Number(row[durationI]) : 180000;
+    out.push({
+      id,
+      uri:"spotify:track:" + id,
+      name: row[titleI] || "Onbekende titel",
+      artists: row[artistI] || "Onbekende artiest",
+      album: albumI >= 0 ? (row[albumI] || "") : "",
+      release_date: releaseI >= 0 ? (row[releaseI] || "") : "",
+      duration_ms: Number.isFinite(durationRaw) && durationRaw > 0 ? durationRaw : 180000
+    });
+  }
+  if(!out.length) throw new Error("Geen bruikbare Spotify-tracks gevonden.");
+  tracks = out;
+  localStorage.setItem("hb_csv_tracks", JSON.stringify(tracks));
+  $("csvStatus").textContent = `${tracks.length} nummers geladen en opgeslagen op dit apparaat.`;
+}
+
+function handleCsvFile(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{ loadCsvText(reader.result); }
+    catch(e){ alert("CSV laden mislukt: " + e.message); }
+  };
+  reader.onerror = () => alert("Bestand lezen mislukt.");
+  reader.readAsText(file);
+}
+
 function randomString(length){
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
   let out = "";
@@ -136,47 +232,9 @@ async function updateStatus(){
     $("loginStatus").textContent = "Nog niet ingelogd.";
     $("activateBtn").disabled = true;
   }
-  $("playlistStatus").textContent = tracks.length ? `${tracks.length} nummers geladen.` : "Nog geen playlist geladen.";
+  $("csvStatus").textContent = tracks.length ? `${tracks.length} nummers geladen op dit apparaat.` : "Nog geen CSV geladen.";
 }
-function playlistIdFromInput(value){
-  const clean = value.trim();
-  const m = clean.match(/playlist\/([a-zA-Z0-9]+)/);
-  if(m) return m[1];
-  if(/^[a-zA-Z0-9]{15,}$/.test(clean)) return clean;
-  return "";
-}
-async function loadPlaylist(){
-  const id = playlistIdFromInput($("playlistInput").value);
-  if(!id){ alert("Plak een geldige Spotify playlist-link."); return; }
-  $("playlistStatus").textContent = "Playlist laden...";
-  let url = `https://api.spotify.com/v1/playlists/${id}/tracks?limit=100&fields=items(track(id,uri,name,duration_ms,artists(name),album(name,images,release_date))),next`;
-  const loaded = [];
-  try{
-    while(url){
-      const data = await api(url);
-      for(const item of data.items || []){
-        const t = item.track;
-        if(t && t.id && t.uri){
-          loaded.push({
-            id:t.id, uri:t.uri, name:t.name, duration_ms:t.duration_ms,
-            artists:(t.artists||[]).map(a=>a.name).join(", "),
-            album:t.album?.name || "",
-            image:t.album?.images?.[0]?.url || "",
-            release_date:t.album?.release_date || ""
-          });
-        }
-      }
-      url = data.next;
-      $("playlistStatus").textContent = `${loaded.length} nummers geladen...`;
-    }
-    tracks = loaded;
-    localStorage.setItem("hb_tracks", JSON.stringify(tracks));
-    $("playlistStatus").textContent = `${tracks.length} nummers geladen.`;
-  }catch(e){
-    alert("Playlist laden mislukt: " + e.message);
-    $("playlistStatus").textContent = "Laden mislukt.";
-  }
-}
+
 window.onSpotifyWebPlaybackSDKReady = () => {};
 async function activatePlayer(){
   const token = await getToken();
@@ -202,14 +260,11 @@ async function activatePlayer(){
   player.addListener("playback_error", ({ message }) => console.log("Playback error", message));
 
   const ok = await player.connect();
-  if(!ok) alert("Spotify speler kon niet verbinden. Probeer Safari/Chrome opnieuw of open Spotify op een ander apparaat.");
+  if(!ok) alert("Spotify speler kon niet verbinden. Probeer opnieuw of gebruik Chrome/Edge op laptop.");
 }
-function usedSet(){
-  return new Set(JSON.parse(localStorage.getItem("hb_used") || "[]"));
-}
-function saveUsed(set){
-  localStorage.setItem("hb_used", JSON.stringify([...set]));
-}
+
+function usedSet(){ return new Set(JSON.parse(localStorage.getItem("hb_used") || "[]")); }
+function saveUsed(set){ localStorage.setItem("hb_used", JSON.stringify([...set])); }
 function chooseTrack(){
   if(!tracks.length) return null;
   const noRepeat = $("noRepeat").checked;
@@ -233,7 +288,7 @@ function startRound(){
   $("answerArea").innerHTML = "";
   currentTrack = chooseTrack();
   if(!currentTrack){
-    alert("Laad eerst een playlist.");
+    alert("Upload eerst je CSV.");
     return;
   }
 
@@ -260,6 +315,7 @@ function startRound(){
     $("answerBtn").disabled = false;
   }, 2500);
 }
+
 async function playHidden(){
   if(!currentTrack) return;
   if(!deviceId){
@@ -285,7 +341,7 @@ async function playHidden(){
     clearTimeout(stopTimer);
     stopTimer = setTimeout(stopPlayback, duration);
   }catch(e){
-    alert("Afspelen mislukt: " + e.message + "\n\nControleer of je Spotify Premium hebt en of de Spotify-speler actief is.");
+    alert("Afspelen mislukt: " + e.message + "\n\nControleer of je Spotify Premium hebt en de speler actief is.");
   }
 }
 async function stopPlayback(){
@@ -297,19 +353,29 @@ function showAnswer(){
   if(!currentTrack) return;
   $("answerArea").innerHTML = `
     <div class="answerCard">
-      ${currentTrack.image ? `<img src="${currentTrack.image}" alt="">` : `<div></div>`}
-      <div>
-        <h3>${currentTrack.name}</h3>
-        <p><strong>Artiest:</strong> ${currentTrack.artists}</p>
-        <p><strong>Album:</strong> ${currentTrack.album || "-"}</p>
-        <p><strong>Jaar:</strong> ${(currentTrack.release_date || "-").slice(0,4)}</p>
-      </div>
+      <h3>${currentTrack.name}</h3>
+      <p><strong>Artiest:</strong> ${currentTrack.artists}</p>
+      <p><strong>Album:</strong> ${currentTrack.album || "-"}</p>
+      <p><strong>Jaar:</strong> ${(currentTrack.release_date || "-").slice(0,4)}</p>
     </div>`;
 }
+
+function clearCsv(){
+  localStorage.removeItem("hb_csv_tracks");
+  tracks = [];
+  $("csvStatus").textContent = "CSV gewist.";
+}
+function resetUsed(){
+  localStorage.removeItem("hb_used");
+  $("csvStatus").textContent = tracks.length ? `${tracks.length} nummers geladen. Gespeelde nummers gereset.` : "Gespeelde nummers gereset.";
+}
+
 $("loginBtn").addEventListener("click", login);
 $("logoutBtn").addEventListener("click", logout);
-$("loadPlaylistBtn").addEventListener("click", loadPlaylist);
 $("activateBtn").addEventListener("click", activatePlayer);
+$("csvFile").addEventListener("change", handleCsvFile);
+$("clearCsvBtn").addEventListener("click", clearCsv);
+$("resetUsedBtn").addEventListener("click", resetUsed);
 $("startBtn").addEventListener("click", startRound);
 $("playBtn").addEventListener("click", playHidden);
 $("stopBtn").addEventListener("click", stopPlayback);

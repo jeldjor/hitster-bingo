@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hitster Bingo Spotify</title>
+  <title>Hitster Bingo CSV Spotify</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
 </head>
@@ -11,25 +11,29 @@
 <div class="app">
   <header>
     <h1>🎵 Hitster Bingo</h1>
-    <p>Kleurenkiezer + Spotify muziekronde</p>
+    <p>Kleurenkiezer + verborgen Spotify-nummers uit jouw CSV</p>
   </header>
 
   <section class="panel">
     <h2>1. Spotify</h2>
-    <div class="spotifyRow">
+    <div class="rowButtons">
       <button id="loginBtn">🔐 Login met Spotify</button>
       <button id="logoutBtn" class="secondary">Uitloggen</button>
     </div>
     <p id="loginStatus" class="small">Nog niet ingelogd.</p>
     <button id="activateBtn" disabled>▶️ Activeer Spotify-speler</button>
-    <p class="small">Laat deze pagina open staan. Op iPhone moet je soms eerst op deze knop tikken voordat audio mag starten.</p>
+    <p class="small">Op iPhone moet je meestal eerst op deze knop tikken voordat audio mag starten.</p>
   </section>
 
   <section class="panel">
-    <h2>2. Playlist</h2>
-    <input id="playlistInput" placeholder="Plak Spotify playlist link of playlist ID">
-    <button id="loadPlaylistBtn" class="secondary">📥 Playlist laden</button>
-    <p id="playlistStatus" class="small">Nog geen playlist geladen.</p>
+    <h2>2. CSV uploaden</h2>
+    <p class="small">Kies je Exportify/Spotify CSV. De app zoekt automatisch naar Track URI, Track Name, Artist Name(s), Album Name en Release Date.</p>
+    <input id="csvFile" type="file" accept=".csv,text/csv">
+    <div class="rowButtons">
+      <button id="clearCsvBtn" class="secondary">CSV wissen</button>
+      <button id="resetUsedBtn" class="secondary">Gespeelde nummers resetten</button>
+    </div>
+    <p id="csvStatus" class="small">Nog geen CSV geladen.</p>
   </section>
 
   <section class="panel">
@@ -67,7 +71,7 @@
       <div class="intro">
         <div class="bigEmoji">🪩</div>
         <h2>Klaar om te spelen</h2>
-        <p>Login, laad playlist en start een ronde.</p>
+        <p>Login, upload CSV en start een ronde.</p>
       </div>
     </div>
 
