@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hitster Bingo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🎵 Hitster Bingo</h1>
+    <p>Vul categorieën in, start een ronde en speel blind een Spotify-nummer.</p>
+  </header>
+
+  <section class="panel">
+    <h2>1. Categorieën</h2>
+    <div class="categories">
+      <label class="yellow">🟨 Geel <input id="cat-yellow" value="Jaren 80"></label>
+      <label class="pink">🩷 Roze <input id="cat-pink" value="Vrouwelijke artiest"></label>
+      <label class="purple">🟪 Paars <input id="cat-purple" value="Nederlandse artiest"></label>
+      <label class="blue">🟦 Blauw <input id="cat-blue" value="Dance"></label>
+      <label class="green">🟩 Groen <input id="cat-green" value="Nummer 1-hit"></label>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>2. Muziek</h2>
+    <p class="small">Prototype: plak Spotify-links handmatig in de lijst. In de echte Spotify-versie kan dit automatisch via je playlist.</p>
+    <textarea id="tracks" rows="7" placeholder="Plak Spotify track links, 1 per regel..."></textarea>
+    <div class="settings">
+      <label>Fragment:
+        <select id="duration">
+          <option value="5">5 sec</option>
+          <option value="10">10 sec</option>
+          <option value="20" selected>20 sec</option>
+          <option value="30">30 sec</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="bonus" checked> Bonusrondes aan</label>
+      <label><input type="checkbox" id="noRepeat" checked> Geen herhaling</label>
+    </div>
+  </section>
+
+  <section class="stage panel">
+    <button id="start">🎲 Start ronde</button>
+    <div id="round">
+      <div class="placeholder">Nog geen ronde gestart</div>
+    </div>
+    <div class="actions">
+      <button id="play" disabled>▶️ Speel verborgen nummer</button>
+      <button id="answer" disabled>✅ Toon antwoord</button>
+    </div>
+    <div id="spotifyBox" class="hidden"></div>
+  </section>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
