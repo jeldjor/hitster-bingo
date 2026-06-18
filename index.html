@@ -84,7 +84,59 @@
     </div>
   </section>
 
-  <section class="panel hidden" id="playerJoinPanel">
+
+  <section class="panel hidden" id="playerAppPanel">
+    <div id="playerScreenJoin" class="playerScreen">
+      <h2>🎫 Meedoen</h2>
+      <p>Spelcode: <strong id="screenRoomCode"></strong></p>
+      <label><span>Jouw naam</span><input id="screenNameInput" placeholder="Bijv. Jan"></label>
+      <button id="screenJoinBtn">Meedoen</button>
+      <p id="screenJoinStatus" class="small"></p>
+    </div>
+
+    <div id="playerScreenLobby" class="playerScreen hidden">
+      <h2>🎮 Lobby</h2>
+      <p id="lobbyStatus" class="small">Wachten op spelers...</p>
+      <div id="lobbyPlayers" class="screenPlayers"></div>
+      <h3>Jouw bingokaart</h3>
+      <div id="screenOwnCard" class="bingoCard"></div>
+      <div id="screenOtherCardBox" class="hidden">
+        <h3 id="screenOtherCardTitle"></h3>
+        <div id="screenOtherCard" class="bingoCard miniScreenCard"></div>
+      </div>
+      <button id="readyBtn">✅ READY</button>
+    </div>
+
+    <div id="playerScreenColor" class="playerScreen hidden">
+      <h2>🎡 Ronde start</h2>
+      <div id="screenColorDisplay" class="screenColorDisplay"></div>
+      <p id="screenCategoryDisplay" class="screenCategoryDisplay"></p>
+    </div>
+
+    <div id="playerScreenAnswer" class="playerScreen hidden">
+      <h2>✍️ Antwoord invullen</h2>
+      <p id="screenAnswerRoundInfo" class="small"></p>
+      <div id="screenTimer" class="timerBox">⏱️ --</div>
+      <input id="screenAnswerInput" placeholder="Typ je antwoord">
+      <button id="screenSubmitAnswerBtn">Verstuur antwoord</button>
+      <p id="screenAnswerStatus" class="small"></p>
+    </div>
+
+    <div id="playerScreenScore" class="playerScreen hidden">
+      <h2>📊 Scorebord</h2>
+      <div id="screenCorrectAnswer" class="correctAnswerBox hidden"></div>
+      <div id="screenScoreboard" class="scoreBoard"></div>
+      <button id="backToLobbyBtn" class="secondary">Terug naar lobby</button>
+    </div>
+
+    <div id="playerScreenPick" class="playerScreen hidden">
+      <h2>✅ Kies je vakje</h2>
+      <p id="screenPickInfo" class="small"></p>
+      <div id="screenPickCard" class="bingoCard"></div>
+    </div>
+  </section>
+
+  <section class="panel hidden legacyPlayer" id="playerJoinPanel">
     <h2>🎫 Meedoen</h2>
     <p>Spelcode: <strong id="playerRoomCode"></strong></p>
     <label><span>Jouw naam</span><input id="playerNameInput" placeholder="Bijv. Jan"></label>
@@ -92,14 +144,14 @@
     <p id="joinStatus" class="small"></p>
   </section>
 
-  <section class="panel hidden" id="playerCardPanel">
+  <section class="panel hidden legacyPlayer" id="playerCardPanel">
     <h2>Jouw bingokaart</h2>
     <div id="playerNameView" class="small"></div>
     <div id="bingoCard" class="bingoCard"></div>
     <div id="playerCategories" class="categoryLegend"></div>
   </section>
 
-  <section class="panel hidden" id="playerAnswerPanel">
+  <section class="panel hidden legacyPlayer" id="playerAnswerPanel">
     <h2>✍️ Jouw antwoord</h2>
     <p id="playerRoundInfo" class="small">Wachten op ronde...</p>
     <div id="timerBox" class="timerBox">⏱️ --</div>
@@ -108,14 +160,14 @@
     <p id="answerStatus" class="small"></p>
   </section>
 
-  <section class="panel hidden" id="playerAnswersOverviewPanel">
+  <section class="panel hidden legacyPlayer" id="playerAnswersOverviewPanel">
     <h2>📊 Scorebord ronde</h2>
     <div id="correctAnswerBox" class="correctAnswerBox hidden"></div>
     <p class="small">Je ziet dit pas nadat je zelf hebt ingestuurd of als de tijd voorbij is.</p>
     <div id="playerAnswersOverview" class="scoreBoard">Nog geen antwoorden zichtbaar.</div>
   </section>
 
-  <section class="panel hidden" id="playerCardsOverviewPanel">
+  <section class="panel hidden legacyPlayer" id="playerCardsOverviewPanel">
     <details class="cardsToggle">
       <summary>👀 Bingokaarten van iedereen bekijken</summary>
       <div id="playerCardsOverview" class="cardsOverview small">Nog geen kaarten.</div>
@@ -125,34 +177,6 @@
   <section class="panel hidden" id="winnerPanel">
     <div id="winnerMessage" class="winnerBanner">🏆</div>
   </section>
-
-  <div id="playerAnswerModal" class="modalOverlay hidden">
-    <div class="modalCard">
-      <h2>✍️ Vul je antwoord in</h2>
-      <p id="modalRoundInfo" class="small"></p>
-      <div id="modalTimerBox" class="timerBox">⏱️ --</div>
-      <input id="modalAnswerInput" placeholder="Typ je antwoord">
-      <button id="modalSubmitAnswerBtn">Verstuur antwoord</button>
-      <p id="modalAnswerStatus" class="small"></p>
-    </div>
-  </div>
-
-  <div id="playerScoreboardModal" class="modalOverlay hidden">
-    <div class="modalCard modalLarge">
-      <button id="closeScoreboardModalBtn" class="modalClose">×</button>
-      <h2>📊 Scorebord ronde</h2>
-      <div id="modalCorrectAnswerBox" class="correctAnswerBox hidden"></div>
-      <div id="modalPlayerAnswersOverview" class="scoreBoard">Nog geen antwoorden zichtbaar.</div>
-    </div>
-  </div>
-
-  <div id="playerPickCardModal" class="modalOverlay hidden">
-    <div class="modalCard modalLarge">
-      <h2>✅ Kies je vakje</h2>
-      <p id="modalPickInfo" class="small"></p>
-      <div id="modalBingoCard" class="bingoCard"></div>
-    </div>
-  </div>
 
   <section class="panel hostOnly">
     <h2>5. Instellingen</h2>

@@ -355,42 +355,49 @@ body.playerMode #playerCardPanel{
   max-width:230px;
 }
 
-/* Player popup flow */
-.modalOverlay{
-  position:fixed;
-  inset:0;
-  z-index:10000;
-  background:rgba(0,0,0,.78);
-  display:flex;
+/* Player screens V1 */
+body.playerMode .legacyPlayer{display:none!important}
+body.playerMode #playerAppPanel{display:block}
+.playerScreen{animation:screenIn .22s ease-out both}
+@keyframes screenIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.screenPlayers{
+  display:grid;
+  gap:10px;
+  margin:14px 0;
+}
+.screenPlayerRow{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:10px;
   align-items:center;
-  justify-content:center;
-  padding:18px;
+  background:rgba(255,255,255,.12);
+  border-radius:16px;
+  padding:12px;
+  cursor:pointer;
 }
-.modalCard{
-  width:min(560px, 100%);
-  max-height:90vh;
-  overflow:auto;
-  background:#160021;
-  border:2px solid rgba(255,255,255,.22);
-  border-radius:28px;
-  padding:22px;
-  box-shadow:0 25px 80px rgba(0,0,0,.65), 0 0 45px rgba(255,79,147,.22);
-  position:relative;
+.screenPlayerRow.ready{
+  box-shadow:0 0 0 2px rgba(115,255,115,.55) inset;
 }
-.modalLarge{
-  width:min(760px, 100%);
+.screenPlayerRow.notReady{
+  box-shadow:0 0 0 2px rgba(255,255,255,.18) inset;
 }
-.modalClose{
-  position:absolute;
-  top:10px;
-  right:10px;
-  width:44px;
-  height:44px;
-  padding:0;
-  border-radius:50%;
+.screenColorDisplay{
+  text-align:center;
+  font-size:70px;
+  font-weight:900;
+  padding:30px;
+  border-radius:26px;
+  background:rgba(255,255,255,.12);
+}
+.screenCategoryDisplay{
+  text-align:center;
   font-size:30px;
-  line-height:1;
+  font-weight:900;
 }
-body.modalOpen{
-  overflow:hidden;
+.miniScreenCard{
+  max-width:330px;
+}
+#readyBtn.readyActive{
+  background:#73ff73;
+  color:#061806;
 }
