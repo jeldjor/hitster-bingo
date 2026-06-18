@@ -3,18 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Hitster Bingo CSV Spotify</title>
+  <title>Hitster Bingo</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
 <div class="app">
   <header>
     <h1>🎵 Hitster Bingo</h1>
-    <p>Kleurenkiezer + verborgen Spotify-nummers uit jouw CSV</p>
+    <p>Muziekmodule + eerste spelersmodule met QR-code</p>
   </header>
 
-  <section class="panel">
+  <section class="panel hostOnly">
     <h2>1. Spotify</h2>
     <div class="rowButtons">
       <button id="loginBtn">🔐 Login met Spotify</button>
@@ -22,12 +25,10 @@
     </div>
     <p id="loginStatus" class="small">Nog niet ingelogd.</p>
     <button id="activateBtn" disabled>▶️ Activeer Spotify-speler</button>
-    <p class="small">Op iPhone moet je meestal eerst op deze knop tikken voordat audio mag starten.</p>
   </section>
 
-  <section class="panel">
+  <section class="panel hostOnly">
     <h2>2. CSV uploaden</h2>
-    <p class="small">Kies je Exportify/Spotify CSV. De app zoekt automatisch naar Track URI, Track Name, Artist Name(s), Album Name en Release Date.</p>
     <input id="csvFile" type="file" accept=".csv,text/csv">
     <div class="rowButtons">
       <button id="clearCsvBtn" class="secondary">CSV wissen</button>
@@ -47,8 +48,39 @@
     </div>
   </section>
 
-  <section class="panel">
-    <h2>4. Instellingen</h2>
+  <section class="panel hostOnly">
+    <h2>4. Spelersmodule</h2>
+    <label><input type="checkbox" id="playerModuleOn"> Spelersmodule gebruiken</label>
+    <button id="newRoomBtn" class="secondary">🎫 Nieuw spel / kamer maken</button>
+    <div id="roomInfo" class="roomBox hidden">
+      <h3>Spelcode: <span id="roomCodeText"></span></h3>
+      <canvas id="qrCanvas"></canvas>
+      <p class="small">Spelers scannen deze QR-code of openen de link.</p>
+      <input id="joinLink" readonly>
+    </div>
+    <div class="playersBox">
+      <h3>Spelers online</h3>
+      <div id="playersList" class="small">Nog geen kamer actief.</div>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="playerJoinPanel">
+    <h2>🎫 Meedoen</h2>
+    <p>Spelcode: <strong id="playerRoomCode"></strong></p>
+    <input id="playerNameInput" placeholder="Vul je naam in">
+    <button id="joinRoomBtn">Meedoen</button>
+    <p id="joinStatus" class="small"></p>
+  </section>
+
+  <section class="panel hidden" id="playerCardPanel">
+    <h2>Jouw bingokaart</h2>
+    <div id="playerNameView" class="small"></div>
+    <div id="bingoCard" class="bingoCard"></div>
+    <div id="playerCategories" class="categoryLegend"></div>
+  </section>
+
+  <section class="panel hostOnly">
+    <h2>5. Instellingen</h2>
     <div class="settings">
       <label>Fragment
         <select id="duration">
@@ -64,27 +96,20 @@
     </div>
   </section>
 
-  <section class="panel stage">
+  <section class="panel stage hostOnly">
     <button id="startBtn">🎲 START RONDE</button>
-
     <div id="pickerArea">
-      <div class="intro">
-        <div class="bigEmoji">🪩</div>
-        <h2>Klaar om te spelen</h2>
-        <p>Login, upload CSV en start een ronde.</p>
-      </div>
+      <div class="intro"><div class="bigEmoji">🪩</div><h2>Klaar om te spelen</h2><p>Login, upload CSV en start een ronde.</p></div>
     </div>
-
     <div class="gameButtons">
       <button id="playBtn" disabled>🎵 Speel verborgen nummer</button>
       <button id="stopBtn" disabled class="secondary">⏹ Stop</button>
       <button id="answerBtn" disabled>✅ Toon antwoord</button>
     </div>
-
+    <p id="nextHint" class="small">Na een ronde: druk opnieuw op START RONDE voor een nieuw willekeurig nummer.</p>
     <div id="answerArea"></div>
   </section>
 </div>
-
 <script src="app.js"></script>
 </body>
 </html>
