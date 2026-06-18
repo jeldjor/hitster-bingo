@@ -1124,3 +1124,325 @@ setTimeout(() => {
     try{ listenPlayerResultStatusV5(); }catch(e){}
   }, 500);
 }, 500);
+
+
+/* =========================
+   V6 SCOREBOARD + BINGO BROADCAST + WINNAARSTEM
+   ========================= */
+
+let lastAnnouncedBingoKey = localStorage.getItem("hb_last_bingo_key") || "";
+
+function playVictoryTune(){
+  try{
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioContext();
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = freq;
+      osc.type = "sine";
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.001, ctx.currentTime + i * 0.18);
+      gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + i * 0.18 + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.16);
+      osc.start(ctx.currentTime + i * 0.18);
+      osc.stop(ctx.currentTime + i * 0.18 + 0.18);
+    });
+  }catch(e){}
+}
+
+function speakWinner(name){
+  try{
+    if(!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const msg = new SpeechSynthesisUtterance("Speler " + name + " heeft gewonnen!");
+    msg.lang = "nl-NL";
+    msg.rate = 0.9;
+    msg.pitch = 1.05;
+    msg.volume = 1;
+    window.speechSynthesis.speak(msg);
+  }catch(e){}
+}
+
+function launchConfetti(){
+  const colors = ["#ffd21f","#ff4f93","#8d35ff","#19a8ff","#62d321","#ffffff"];
+  for(let i=0;i<90;i++){
+    const p = document.createElement("div");
+    p.className = "confettiPiece";
+    p.style.left = Math.random()*100 + "vw";
+    p.style.background = colors[Math.floor(Math.random()*colors.length)];
+    p.style.animationDelay = (Math.random()*0.6) + "s";
+    p.style.transform = "rotate(" + (Math.random()*360) + "deg)";
+    document.body.appendChild(p);
+    setTimeout(()=>p.remove(), 3500);
+  }
+}
+
+function showWinnerEverywhere(name){
+  if($("winnerPanel") && $("winnerMessage")){
+    $("winnerPanel").classList.remove("hidden");
+    $("winnerMessage").innerHTML = "🏆 BINGO!<br>Speler " + esc(name) + " heeft gewonnen!";
+  }
+  if($("hostBingoBox") && $("hostBingoMessage")){
+    $("hostBingoBox").classList.remove("hidden");
+    $("hostBingoMessage").innerHTML = "🏆 BINGO!<br>Speler " + esc(name) + " heeft gewonnen!";
+  }
+  launchConfetti();
+  playVictoryTune();
+  setTimeout(()=>speakWinner(name), 700);
+}
+
+function listenForBingoV6(){
+  const room = currentRoomCode || localStorage.getItem("hb_host_room") || "";
+  if(!db || !room) return;
+
+  db.ref("rooms/" + room + "/bingos").on("child_added", snap => {
+    const bingo = snap.val() || {};
+    const key = snap.key + "_" + (bingo.roundId || "");
+    if(key === lastAnnouncedBingoKey) return;
+    lastAnnouncedBingoKey = key;
+    localStorage.setItem("hb_last_bingo_key", key);
+    showWinnerEverywhere(bingo.name || "onbekend");
+  });
+}
+
+function makeScoreCard(name, answer, status, isMe){
+  let icon = "⏳";
+  let cls = "scorePending";
+  if(status === true){ icon = "✅"; cls = "scoreGood"; }
+  else if(status === false){ icon = "❌"; cls = "scoreBad"; }
+
+  return `<div class="scoreCard ${cls}">
+    <div class="scoreName">${esc(name)}${isMe ? " (jij)" : ""}</div>
+    <div class="scoreAnswer">${esc(answer || "Geen antwoord")}</div>
+    <div class="scoreStatus">${icon}</div>
+  </div>`;
+}
+
+// Host-scorebord mooier maken
+if(typeof listenAnswersForHost === "function"){
+  const oldListenAnswersForHostV6 = listenAnswersForHost;
+  listenAnswersForHost = function(roomCode, roundId){
+    hostAnswerRoundId = roundId;
+    if($("hostAnswersBox")) $("hostAnswersBox").classList.remove("hidden");
+
+    db.ref("rooms/"+roomCode).on("value", snap=>{
+      const room=snap.val()||{};
+      const round=room.currentRound||{};
+      const activeRoundId = round.id || roundId;
+      if(!activeRoundId) return;
+      hostAnswerRoundId = activeRoundId;
+
+      if($("hostRoundInfo")){
+        $("hostRoundInfo").textContent =
+          (round.colorEmoji||"") + " " + (round.colorName||"") +
+          " — " + (round.category||"") +
+          " — status: " + (round.status||"");
+      }
+
+      const players=room.players||{};
+      const answers=room.answers&&room.answers[activeRoundId] ? room.answers[activeRoundId] : {};
+      const correct=room.correct&&room.correct[activeRoundId] ? room.correct[activeRoundId] : {};
+
+      const rows=Object.entries(players).map(([pid,p])=>{
+        const ans=answers[pid] ? answers[pid].answer : "";
+        const status=correct[pid];
+        let statusClass = status === true ? "scoreGood" : status === false ? "scoreBad" : "scorePending";
+        return `<div class="scoreCard ${statusClass}">
+          <div class="scoreName">${esc(p.name||"Speler")}</div>
+          <div class="scoreAnswer">${esc(ans||"Geen antwoord")}</div>
+          <div>
+            <button class="goodBtn ${status===true?"goodSelected":""}" onclick="markAnswer('${pid}', true)">✅</button>
+            <button class="badBtn ${status===false?"badSelected":""}" onclick="markAnswer('${pid}', false)">❌</button>
+          </div>
+        </div>`;
+      }).join("");
+
+      if($("hostAnswersList")) $("hostAnswersList").innerHTML = rows || "Nog geen spelers.";
+    });
+  };
+}
+
+// Speler-scorebord mooier maken
+function renderPlayerAnswersOverviewV6(room){
+  if(!$("playerAnswersOverviewPanel") || !$("playerAnswersOverview")) return;
+
+  const round = room.currentRound || {};
+  if(!round.id){
+    $("playerAnswersOverviewPanel").classList.add("hidden");
+    return;
+  }
+
+  if(!playerMaySeeAnswers(room, round)){
+    $("playerAnswersOverviewPanel").classList.add("hidden");
+    return;
+  }
+
+  $("playerAnswersOverviewPanel").classList.remove("hidden");
+
+  const players = room.players || {};
+  const answers = room.answers && room.answers[round.id] ? room.answers[round.id] : {};
+  const correct = room.correct && room.correct[round.id] ? room.correct[round.id] : {};
+
+  const rows = Object.entries(players).map(([pid,p]) => {
+    const ans = answers[pid] && answers[pid].answer ? answers[pid].answer : "Geen antwoord";
+    const status = round.status === "judged" ? correct[pid] : undefined;
+    return makeScoreCard(p.name || "Speler", ans, status, pid === currentPlayerId);
+  }).join("");
+
+  $("playerAnswersOverview").innerHTML = rows || "Nog geen spelers.";
+}
+
+// Override oude overzicht-renderer
+renderPlayerAnswersOverview = renderPlayerAnswersOverviewV6;
+
+// Fix: bingo opslaan met uniek push-id, zodat child_added altijd afgaat
+if(typeof markBingoCellV5 === "function"){
+  const oldMarkBingoCellV6 = markBingoCellV5;
+  markBingoCellV5 = function(index){
+    if(!db || !currentRoomCode || !currentPlayerId || !activePlayerRound) return;
+
+    db.ref("rooms/" + currentRoomCode + "/players/" + currentPlayerId).once("value").then(s => {
+      const p = s.val() || {};
+      const card = p.card || [];
+      const marked = p.marked || {};
+
+      if(!playerMayPickV5(card[index], index, marked)) return;
+
+      marked[index] = true;
+      window.__playerPickedThisRound = true;
+
+      const hasBingo = checkBingoV5(marked);
+
+      return db.ref("rooms/" + currentRoomCode + "/players/" + currentPlayerId).update({
+        marked: marked,
+        bingo: hasBingo || false,
+        lastPickedRound: activePlayerRound.id
+      }).then(() => {
+        if(hasBingo){
+          $("answerStatus").innerHTML = "🎉 <strong>BINGO!</strong>";
+          const bingoData = {
+            playerId: currentPlayerId,
+            name: currentPlayerName,
+            roundId: activePlayerRound.id,
+            at: firebase.database.ServerValue.TIMESTAMP
+          };
+          return db.ref("rooms/" + currentRoomCode + "/bingos").push(bingoData);
+        }else{
+          $("answerStatus").textContent = "✅ Vakje afgestreept. Wacht op de volgende ronde.";
+        }
+      });
+    });
+  };
+
+  // Zorg dat renderCard de nieuwe mark-functie gebruikt
+  renderCardV5 = function(card, marked){
+    const canPickNow = activePlayerRound && activePlayerRound.status === "judged" && window.__playerIsCorrect === true && !window.__playerPickedThisRound;
+
+    $("bingoCard").innerHTML = card.map((c,i) => {
+      const markedHere = marked && marked[i];
+      const pickable = playerMayPickV5(c, i, marked);
+      const blocked = canPickNow && !pickable && c !== "free" && !markedHere;
+
+      return `<div class="bingoCell ${c==="free"?"free":""} ${pickable?"pickableCell":""} ${blocked?"blockedCell":""}" data-index="${i}" data-color="${c}">
+        ${markedHere ? "✅" : emoji(c)}
+      </div>`;
+    }).join("");
+
+    document.querySelectorAll(".pickableCell").forEach(el => {
+      el.addEventListener("click", () => markBingoCellV5(Number(el.dataset.index)));
+    });
+  };
+
+  renderCard = renderCardV5;
+}
+
+// Start bingo-listener op host en speler
+setTimeout(() => {
+  listenForBingoV6();
+}, 1200);
+
+
+/* =========================
+   V7 JUISTE ANTWOORD NAAR SPELERS
+   ========================= */
+
+function currentCorrectAnswerData(){
+  if(!currentTrack) return null;
+  return {
+    title: currentTrack.name || "",
+    artist: currentTrack.artists || "",
+    album: currentTrack.album || "",
+    year: (currentTrack.release_date || "").slice(0,4),
+    shownAt: firebase && firebase.database ? firebase.database.ServerValue.TIMESTAMP : Date.now()
+  };
+}
+
+function showAnswerV7(){
+  if(!currentTrack) return;
+
+  // Host ziet antwoord zoals eerst
+  $("answerArea").innerHTML=`<div class="answerCard">
+    <h3>${esc(currentTrack.name)}</h3>
+    <p><strong>Artiest:</strong> ${esc(currentTrack.artists)}</p>
+    <p><strong>Album:</strong> ${esc(currentTrack.album||"-")}</p>
+    <p><strong>Jaar:</strong> ${esc((currentTrack.release_date||"-").slice(0,4))}</p>
+    <p><strong>Volgende:</strong> druk op START RONDE voor een nieuw willekeurig nummer.</p>
+  </div>`;
+
+  // Stuur antwoord naar spelers
+  const room = currentRoomCode || localStorage.getItem("hb_host_room") || "";
+  const roundId = hostAnswerRoundId || v5CurrentRoundId || "";
+  const answer = currentCorrectAnswerData();
+
+  if(db && room && roundId && answer){
+    db.ref("rooms/" + room + "/correctAnswer/" + roundId).set(answer);
+    db.ref("rooms/" + room + "/currentRound/correctAnswerShown").set(true);
+  }
+}
+
+function renderCorrectAnswerBox(answer){
+  if(!$("correctAnswerBox")) return;
+
+  if(!answer || (!answer.title && !answer.artist)){
+    $("correctAnswerBox").classList.add("hidden");
+    $("correctAnswerBox").innerHTML = "";
+    return;
+  }
+
+  $("correctAnswerBox").classList.remove("hidden");
+  $("correctAnswerBox").innerHTML = `
+    <h3>✅ Juiste antwoord</h3>
+    <p><strong>${esc(answer.title || "-")}</strong></p>
+    <p>👤 ${esc(answer.artist || "-")}</p>
+    <p>💿 ${esc(answer.album || "-")}</p>
+    <p>📅 ${esc(answer.year || "-")}</p>
+  `;
+}
+
+// Breid scorebord-render uit met juiste antwoord
+const oldRenderPlayerAnswersOverviewV7 = renderPlayerAnswersOverview;
+renderPlayerAnswersOverview = function(room){
+  const round = room.currentRound || {};
+  if(round && round.id){
+    const answer = room.correctAnswer && room.correctAnswer[round.id] ? room.correctAnswer[round.id] : null;
+    renderCorrectAnswerBox(answer);
+  } else {
+    renderCorrectAnswerBox(null);
+  }
+  oldRenderPlayerAnswersOverviewV7(room);
+};
+
+// Override Toon antwoord knop
+showAnswer = showAnswerV7;
+
+setTimeout(() => {
+  const answerOld = $("answerBtn");
+  if(answerOld){
+    const answerNew = answerOld.cloneNode(true);
+    answerOld.parentNode.replaceChild(answerNew, answerOld);
+    answerNew.addEventListener("click", showAnswerV7);
+  }
+}, 500);

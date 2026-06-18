@@ -71,9 +71,14 @@
     <div class="playersBox hidden" id="hostAnswersBox">
       <h3>Antwoorden deze ronde</h3>
       <p id="hostRoundInfo" class="small"></p>
-      <div id="hostAnswersList" class="small">Nog geen antwoorden.</div>
+      <div id="hostAnswersList" class="scoreBoard">Nog geen antwoorden.</div>
       <button id="lockRoundBtn" class="secondary">🔒 Antwoorden vergrendelen</button>
       <button id="publishResultsBtn">✅ Resultaten naar spelers sturen</button>
+    </div>
+
+    <div class="playersBox hidden" id="hostBingoBox">
+      <h3>🏆 Bingo melding</h3>
+      <div id="hostBingoMessage" class="winnerBanner">Nog geen bingo.</div>
     </div>
   </section>
 
@@ -102,9 +107,14 @@
   </section>
 
   <section class="panel hidden" id="playerAnswersOverviewPanel">
-    <h2>👀 Antwoorden van iedereen</h2>
+    <h2>📊 Scorebord ronde</h2>
+    <div id="correctAnswerBox" class="correctAnswerBox hidden"></div>
     <p class="small">Je ziet dit pas nadat je zelf hebt ingestuurd of als de tijd voorbij is.</p>
-    <div id="playerAnswersOverview" class="small">Nog geen antwoorden zichtbaar.</div>
+    <div id="playerAnswersOverview" class="scoreBoard">Nog geen antwoorden zichtbaar.</div>
+  </section>
+
+  <section class="panel hidden" id="winnerPanel">
+    <div id="winnerMessage" class="winnerBanner">🏆</div>
   </section>
 
   <section class="panel hostOnly">
