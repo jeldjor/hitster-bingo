@@ -62,7 +62,7 @@ function startRound(){
     $("playBtn").textContent="🎵 Speel verborgen nummer";
 
     // Synchroniseer ronde naar spelers als er een actieve kamer is
-    if(db && currentRoomCode && $("playerModuleOn") && $("playerModuleOn").checked){
+    if(db && currentRoomCode){
       const roundData={
         id:roundId,
         status:"answering",
@@ -75,7 +75,7 @@ function startRound(){
         colorEmoji:selectedColor?selectedColor.emoji:"⭐",
         category:isBonus?bonusText:roundCategory
       };
-      db.ref("rooms/"+currentRoomCode+"/currentRound").set(roundData);
+      db.ref("rooms/"+currentRoomCode+"/currentRound").set(roundData).then(()=>{ if($("hostRoundInfo")) $("hostRoundInfo").textContent="Ronde verzonden naar spelers."; });
       db.ref("rooms/"+currentRoomCode+"/rounds/"+roundId).set(roundData);
       $("hostAnswersBox").classList.remove("hidden");
       listenAnswersForHost(currentRoomCode, roundId);
@@ -337,3 +337,78 @@ if($("submitAnswerBtn")){
 if($("lockRoundBtn")){
   $("lockRoundBtn").addEventListener("click", ()=>lockRound(hostAnswerRoundId));
 }
+
+
+/* =========================
+   ROUND SYNC FIX V2
+   ========================= */
+
+function getActiveRoomCode(){
+  return currentRoomCode || localStorage.getItem("hb_host_room") || "";
+}
+
+function sendRoundToPlayersForced(){
+  const roomCode = getActiveRoomCode();
+  if(!db || !roomCode){
+    if($("roundSyncStatus")) $("roundSyncStatus").textContent = "Geen actieve kamer gevonden.";
+    return;
+  }
+
+  const seconds = Number($("duration") ? $("duration").value : 20) || 20;
+  const selected = window.__lastSelectedColor || pick(colors);
+  const category = selected && selected.input ? ($(selected.input).value.trim() || "Geen categorie ingevuld") : "Ronde";
+  const roundId = "r_" + Date.now();
+  const deadline = Date.now() + seconds * 1000;
+
+  const roundData = {
+    id: roundId,
+    status: "answering",
+    startedAt: firebase.database.ServerValue.TIMESTAMP,
+    deadlineMs: deadline,
+    seconds: seconds,
+    isBonus: false,
+    colorKey: selected.key || "",
+    colorName: selected.name || "",
+    colorEmoji: selected.emoji || "",
+    category: category
+  };
+
+  db.ref("rooms/" + roomCode + "/currentRound").set(roundData)
+    .then(() => db.ref("rooms/" + roomCode + "/rounds/" + roundId).set(roundData))
+    .then(() => {
+      if($("roundSyncStatus")) $("roundSyncStatus").textContent =
+        "✅ Ronde verzonden naar spelers: " + roundData.colorEmoji + " " + roundData.colorName + " — " + roundData.category;
+      if($("hostAnswersBox")) $("hostAnswersBox").classList.remove("hidden");
+      if(typeof listenAnswersForHost === "function") listenAnswersForHost(roomCode, roundId);
+      setTimeout(() => {
+        if(typeof lockRound === "function") lockRound(roundId);
+      }, seconds * 1000);
+    })
+    .catch(e => {
+      if($("roundSyncStatus")) $("roundSyncStatus").textContent = "❌ Ronde verzenden mislukt: " + e.message;
+      showError("Ronde verzenden mislukt: " + e.message);
+    });
+}
+
+// Onthoud de kleur die visueel gekozen wordt in startRound, als die code bestaat
+const originalPickForRoundSync = pick;
+pick = function(list){
+  const value = originalPickForRoundSync(list);
+  try{
+    if(Array.isArray(list) && list.length && list[0] && list[0].key && list[0].emoji){
+      window.__lastSelectedColor = value;
+    }
+  }catch(e){}
+  return value;
+};
+
+// Forceer ronde-sync na elke START RONDE klik.
+// Dit staat los van de eerdere ronde-sync, zodat spelers zeker een ronde krijgen.
+setTimeout(() => {
+  const btn = $("startBtn");
+  if(btn){
+    btn.addEventListener("click", () => {
+      setTimeout(sendRoundToPlayersForced, 3200);
+    });
+  }
+}, 0);

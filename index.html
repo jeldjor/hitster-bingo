@@ -54,7 +54,7 @@
 
   <section class="panel hostOnly">
     <h2>4. Spelersmodule</h2>
-    <label><input type="checkbox" id="playerModuleOn"> Spelersmodule gebruiken</label>
+    <label><input type="checkbox" id="playerModuleOn" checked> Spelersmodule gebruiken</label>
     <button id="newRoomBtn" class="secondary">🎫 Nieuw spel / kamer maken</button>
     <div id="roomInfo" class="roomBox hidden">
       <h3>Spelcode: <span id="roomCodeText"></span></h3>
@@ -65,7 +65,7 @@
     </div>
     <div class="playersBox">
       <h3>Spelers online</h3>
-      <div id="playersList" class="small">Nog geen kamer actief.</div>
+      <div id="playersList" class="small">Nog geen kamer actief.</div><p id="roundSyncStatus" class="small">Nog geen ronde verzonden.</p>
     </div>
 
     <div class="playersBox hidden" id="hostAnswersBox">
