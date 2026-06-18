@@ -135,3 +135,20 @@ body.playerMode #playerCardPanel{
 @media(max-width:650px){
   .playerAnswerRow{grid-template-columns:1fr}
 }
+
+/* V5 final flow fix */
+.playerWaiting{
+  background:rgba(255,255,255,.12);
+  border-radius:16px;
+  padding:12px;
+  font-weight:900;
+}
+.pickableCell{
+  outline:4px solid #fff !important;
+  box-shadow:0 0 22px #fff !important;
+  cursor:pointer !important;
+  transform:scale(1.03);
+}
+.blockedCell{
+  opacity:.35 !important;
+}
