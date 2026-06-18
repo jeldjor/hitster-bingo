@@ -65,3 +65,38 @@ body.playerMode #playerCardPanel{
   margin-left:auto;
   margin-right:auto;
 }
+
+.timerBox{
+  font-size:34px;
+  font-weight:900;
+  text-align:center;
+  padding:12px;
+  border-radius:18px;
+  background:rgba(255,255,255,.12);
+  margin:10px 0;
+}
+.answerRow{
+  display:grid;
+  grid-template-columns:1fr auto auto;
+  gap:8px;
+  align-items:center;
+  padding:10px 0;
+  border-bottom:1px solid rgba(255,255,255,.12);
+}
+.answerText{
+  opacity:.9;
+}
+.goodBtn,.badBtn{
+  padding:8px 10px;
+  font-size:16px;
+  border-radius:12px;
+  margin:0;
+}
+.goodSelected{background:#73ff73!important;color:#061806!important}
+.badSelected{background:#ff7373!important;color:#250606!important}
+.lockedInput{
+  opacity:.65;
+}
+@media(max-width:650px){
+  .answerRow{grid-template-columns:1fr; text-align:left}
+}

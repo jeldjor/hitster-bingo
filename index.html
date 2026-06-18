@@ -41,7 +41,7 @@
     <p id="csvStatus" class="small">Nog geen CSV geladen.</p>
   </section>
 
-  <section class="panel">
+  <section class="panel hostOnly">
     <h2>3. Categorieën</h2>
     <div class="categories">
       <label><span>🟨 Geel</span><input id="cat-yellow" value="Jaren 80"></label>
@@ -67,6 +67,13 @@
       <h3>Spelers online</h3>
       <div id="playersList" class="small">Nog geen kamer actief.</div>
     </div>
+
+    <div class="playersBox hidden" id="hostAnswersBox">
+      <h3>Antwoorden deze ronde</h3>
+      <p id="hostRoundInfo" class="small"></p>
+      <div id="hostAnswersList" class="small">Nog geen antwoorden.</div>
+      <button id="lockRoundBtn" class="secondary">🔒 Antwoorden vergrendelen</button>
+    </div>
   </section>
 
   <section class="panel hidden" id="playerJoinPanel">
@@ -82,6 +89,15 @@
     <div id="playerNameView" class="small"></div>
     <div id="bingoCard" class="bingoCard"></div>
     <div id="playerCategories" class="categoryLegend"></div>
+  </section>
+
+  <section class="panel hidden" id="playerAnswerPanel">
+    <h2>✍️ Jouw antwoord</h2>
+    <p id="playerRoundInfo" class="small">Wachten op ronde...</p>
+    <div id="timerBox" class="timerBox">⏱️ --</div>
+    <input id="playerAnswerInput" placeholder="Typ je antwoord">
+    <button id="submitAnswerBtn">Verstuur antwoord</button>
+    <p id="answerStatus" class="small"></p>
   </section>
 
   <section class="panel hostOnly">
