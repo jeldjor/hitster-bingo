@@ -401,3 +401,12 @@ body.playerMode #playerAppPanel{display:block}
   background:#73ff73;
   color:#061806;
 }
+
+/* Player screens visible fix */
+body.playerMode #playerAppPanel,
+body.playerMode #playerAppPanel.hidden{
+  display:block !important;
+}
+body.playerMode #playerScreenJoin.hidden:first-child{
+  display:block !important;
+}

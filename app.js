@@ -2608,3 +2608,57 @@ setTimeout(() => {
 
   setupScreenJoin();
 }, 800);
+
+
+/* =========================
+   PLAYER SCREEN VISIBLE FIX
+   ========================= */
+
+function forcePlayerScreenVisible(){
+  const room = new URLSearchParams(window.location.search).get("room");
+  if(!room) return;
+
+  document.body.classList.add("playerMode");
+
+  document.querySelectorAll(".hostOnly,.legacyPlayer").forEach(el => {
+    el.classList.add("hidden");
+    el.style.display = "none";
+  });
+
+  const panel = document.getElementById("playerAppPanel");
+  if(panel){
+    panel.classList.remove("hidden");
+    panel.style.display = "block";
+  }
+
+  const roomCode = document.getElementById("screenRoomCode");
+  if(roomCode) roomCode.textContent = room.toUpperCase();
+
+  const joinScreen = document.getElementById("playerScreenJoin");
+  const hasJoined = localStorage.getItem("hb_player_room") === room.toUpperCase()
+    && localStorage.getItem("hb_player_id")
+    && localStorage.getItem("hb_player_name");
+
+  if(joinScreen && !hasJoined){
+    document.querySelectorAll("#playerAppPanel .playerScreen").forEach(s => s.classList.add("hidden"));
+    joinScreen.classList.remove("hidden");
+  }
+
+  const nameInput = document.getElementById("screenNameInput");
+  if(nameInput && localStorage.getItem("hb_player_name")){
+    nameInput.value = localStorage.getItem("hb_player_name");
+  }
+
+  // Als de normale setup niet liep, start hem alsnog
+  try{
+    if(typeof setupScreenJoin === "function"){
+      setupScreenJoin();
+    }
+  }catch(e){
+    console.log("setupScreenJoin fallback error", e);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", forcePlayerScreenVisible);
+setTimeout(forcePlayerScreenVisible, 200);
+setTimeout(forcePlayerScreenVisible, 800);
