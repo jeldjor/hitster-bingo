@@ -339,76 +339,389 @@ if($("lockRoundBtn")){
 }
 
 
+
+
+
 /* =========================
-   ROUND SYNC FIX V2
+   SPELERSMODULE V3: TIMER PAS BIJ SPEEL NUMMER + VAKJE KIEZEN
    ========================= */
 
-function getActiveRoomCode(){
+let v3RoundId = "";
+let v3SelectedColor = null;
+let v3RoundCategory = "";
+let v3RoundIsBonus = false;
+
+function v3Seconds(){
+  return Number($("duration") ? $("duration").value : 20) || 20;
+}
+
+function v3Room(){
   return currentRoomCode || localStorage.getItem("hb_host_room") || "";
 }
 
-function sendRoundToPlayersForced(){
-  const roomCode = getActiveRoomCode();
-  if(!db || !roomCode){
-    if($("roundSyncStatus")) $("roundSyncStatus").textContent = "Geen actieve kamer gevonden.";
-    return;
-  }
+function v3SendReadyRound(){
+  const roomCode = v3Room();
+  if(!db || !roomCode || !v3SelectedColor) return;
 
-  const seconds = Number($("duration") ? $("duration").value : 20) || 20;
-  const selected = window.__lastSelectedColor || pick(colors);
-  const category = selected && selected.input ? ($(selected.input).value.trim() || "Geen categorie ingevuld") : "Ronde";
-  const roundId = "r_" + Date.now();
-  const deadline = Date.now() + seconds * 1000;
+  v3RoundId = "r_" + Date.now();
 
   const roundData = {
-    id: roundId,
-    status: "answering",
-    startedAt: firebase.database.ServerValue.TIMESTAMP,
-    deadlineMs: deadline,
-    seconds: seconds,
-    isBonus: false,
-    colorKey: selected.key || "",
-    colorName: selected.name || "",
-    colorEmoji: selected.emoji || "",
-    category: category
+    id: v3RoundId,
+    status: "ready",
+    createdAt: firebase.database.ServerValue.TIMESTAMP,
+    seconds: v3Seconds(),
+    isBonus: v3RoundIsBonus,
+    colorKey: v3SelectedColor.key || "",
+    colorName: v3SelectedColor.name || "",
+    colorEmoji: v3SelectedColor.emoji || "",
+    category: v3RoundCategory || ""
   };
 
   db.ref("rooms/" + roomCode + "/currentRound").set(roundData)
-    .then(() => db.ref("rooms/" + roomCode + "/rounds/" + roundId).set(roundData))
+    .then(() => db.ref("rooms/" + roomCode + "/rounds/" + v3RoundId).set(roundData))
     .then(() => {
       if($("roundSyncStatus")) $("roundSyncStatus").textContent =
-        "✅ Ronde verzonden naar spelers: " + roundData.colorEmoji + " " + roundData.colorName + " — " + roundData.category;
+        "✅ Ronde klaar voor spelers. Timer start pas bij 'Speel verborgen nummer'.";
       if($("hostAnswersBox")) $("hostAnswersBox").classList.remove("hidden");
-      if(typeof listenAnswersForHost === "function") listenAnswersForHost(roomCode, roundId);
-      setTimeout(() => {
-        if(typeof lockRound === "function") lockRound(roundId);
-      }, seconds * 1000);
+      listenAnswersForHost(roomCode, v3RoundId);
     })
-    .catch(e => {
-      if($("roundSyncStatus")) $("roundSyncStatus").textContent = "❌ Ronde verzenden mislukt: " + e.message;
-      showError("Ronde verzenden mislukt: " + e.message);
-    });
+    .catch(e => showError("Ronde klaarzetten mislukt: " + e.message));
 }
 
-// Onthoud de kleur die visueel gekozen wordt in startRound, als die code bestaat
-const originalPickForRoundSync = pick;
-pick = function(list){
-  const value = originalPickForRoundSync(list);
-  try{
-    if(Array.isArray(list) && list.length && list[0] && list[0].key && list[0].emoji){
-      window.__lastSelectedColor = value;
+function startRoundV3(){
+  currentTrack=chooseTrack();
+  $("answerArea").innerHTML="";
+  $("playBtn").disabled=true;
+  $("answerBtn").disabled=true;
+
+  if(!currentTrack){
+    alert("Upload eerst je CSV.");
+    return;
+  }
+
+  const area=$("pickerArea");
+  const mode=Math.random()<.5?"discobal":"rad";
+  v3RoundIsBonus=$("bonusOn").checked&&Math.random()<.05;
+
+  area.innerHTML=mode==="discobal"
+    ? `<div class="discoWrap"><div class="pickerTitle">🎉 Discobal kiest...</div><div class="disco"></div></div>`
+    : `<div><div class="pickerTitle">🎡 Draairad draait...</div><div class="wheelWrap"><div class="pointer"></div><div class="wheel"></div></div></div>`;
+
+  setTimeout(()=>{
+    flash();
+
+    if(v3RoundIsBonus){
+      v3SelectedColor={key:"", name:"BONUS", emoji:"⭐", hex:"#fff200", input:""};
+      v3RoundCategory=pick(["Vrije kleur kiezen","2 vakjes afstrepen","Extra beurt","Raad binnen 5 seconden"]);
+      area.innerHTML=`<div class="reveal"><div class="colorName">⭐ BONUSRONDE</div><div class="category">${v3RoundCategory}</div></div>`;
+    }else{
+      v3SelectedColor=pick(colors);
+      v3RoundCategory=$(v3SelectedColor.input).value.trim()||"Geen categorie ingevuld";
+      area.innerHTML=`<div class="reveal"><div class="colorDot" style="background:${v3SelectedColor.hex};color:${v3SelectedColor.hex}"></div><div class="colorName">${v3SelectedColor.emoji} ${v3SelectedColor.name}</div><div class="category">Categorie:<br><strong>${v3RoundCategory}</strong></div></div>`;
     }
-  }catch(e){}
-  return value;
+
+    $("playBtn").disabled=false;
+    $("answerBtn").disabled=false;
+    $("playBtn").textContent="🎵 Speel verborgen nummer";
+    v3SendReadyRound();
+  },2500);
+}
+
+async function playHiddenV3(){
+  if(!currentTrack) return;
+
+  $("playBtn").disabled=true;
+  $("playBtn").textContent="🎵 Nummer speelt...";
+
+  if(!deviceId){
+    await activatePlayer();
+    await new Promise(r=>setTimeout(r,1200));
+  }
+
+  if(!deviceId){
+    alert("Geen Spotify-speler actief.");
+    $("playBtn").disabled=false;
+    $("playBtn").textContent="🎵 Speel verborgen nummer";
+    return;
+  }
+
+  const dur=v3Seconds()*1000;
+  let pos=0;
+
+  if($("randomStart").checked&&currentTrack.duration_ms>dur+40000){
+    const max=Math.max(0,currentTrack.duration_ms-dur-5000);
+    pos=Math.floor(20000+Math.random()*Math.max(1,max-20000));
+  }
+
+  try{
+    await api(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,{
+      method:"PUT",
+      body:JSON.stringify({uris:[currentTrack.uri],position_ms:pos})
+    });
+
+    const roomCode=v3Room();
+    if(db && roomCode && v3RoundId){
+      const deadline=Date.now()+dur;
+      const updates={
+        status:"answering",
+        startedAt:firebase.database.ServerValue.TIMESTAMP,
+        deadlineMs:deadline
+      };
+      await db.ref("rooms/"+roomCode+"/currentRound").update(updates);
+      await db.ref("rooms/"+roomCode+"/rounds/"+v3RoundId).update(updates);
+      if($("roundSyncStatus")) $("roundSyncStatus").textContent="⏱️ Muziek gestart. Timer loopt bij spelers.";
+      setTimeout(()=>lockRound(v3RoundId), dur);
+    }
+
+    $("stopBtn").disabled=false;
+    clearTimeout(stopTimer);
+    stopTimer=setTimeout(stopPlayback,dur);
+  }catch(e){
+    alert("Afspelen mislukt: "+e.message);
+    $("playBtn").disabled=false;
+    $("playBtn").textContent="🎵 Speel verborgen nummer";
+  }
+}
+
+function publishResultsToPlayers(){
+  const roomCode=v3Room();
+  if(!db || !roomCode || !hostAnswerRoundId) return;
+
+  db.ref("rooms/"+roomCode+"/currentRound/status").set("judged");
+  db.ref("rooms/"+roomCode+"/rounds/"+hostAnswerRoundId+"/status").set("judged");
+
+  if($("roundSyncStatus")) $("roundSyncStatus").textContent="✅ Resultaten verzonden. Goede spelers mogen 1 vakje van de gespeelde kleur kiezen.";
+}
+
+function playerCanPickCell(cellColor, index){
+  if(!activePlayerRound) return false;
+  if(activePlayerRound.status!=="judged") return false;
+  if(!window.__playerIsCorrect) return false;
+  if(window.__playerPickedThisRound) return false;
+  if(cellColor==="free") return false;
+  return cellColor===activePlayerRound.colorKey;
+}
+
+function checkBingo(marked){
+  const lines=[
+    [0,1,2,3,4],[5,6,7,8,9],[10,11,12,13,14],[15,16,17,18,19],[20,21,22,23,24],
+    [0,5,10,15,20],[1,6,11,16,21],[2,7,12,17,22],[3,8,13,18,23],[4,9,14,19,24],
+    [0,6,12,18,24],[4,8,12,16,20]
+  ];
+  const isMarked=i=>marked && (marked[i] || i===12);
+  return lines.some(line=>line.every(isMarked));
+}
+
+function markBingoCell(index){
+  if(!db||!currentRoomCode||!currentPlayerId||!activePlayerRound) return;
+
+  db.ref("rooms/"+currentRoomCode+"/players/"+currentPlayerId).once("value").then(s=>{
+    const p=s.val()||{};
+    const card=p.card||[];
+    const marked=p.marked||{};
+    if(!playerCanPickCell(card[index], index)) return;
+
+    marked[index]=true;
+    window.__playerPickedThisRound=true;
+
+    const hasBingo=checkBingo(marked);
+    const updates={marked};
+    if(hasBingo) updates.bingo=true;
+
+    return db.ref("rooms/"+currentRoomCode+"/players/"+currentPlayerId).update(updates)
+      .then(()=>{
+        $("answerStatus").innerHTML=hasBingo
+          ? "🎉 <strong>BINGO!</strong>"
+          : "✅ Vakje afgestreept. Wacht op de volgende ronde.";
+        if(hasBingo){
+          db.ref("rooms/"+currentRoomCode+"/bingos/"+currentPlayerId).set({
+            name:currentPlayerName,
+            roundId:activePlayerRound.id,
+            at:firebase.database.ServerValue.TIMESTAMP
+          });
+        }
+      });
+  });
+}
+
+function renderCardV3(card,marked){
+  const canPick = activePlayerRound && activePlayerRound.status==="judged" && window.__playerIsCorrect && !window.__playerPickedThisRound;
+  $("bingoCard").innerHTML=card.map((c,i)=>{
+    const markedHere = marked && marked[i];
+    const pickable = canPick && playerCanPickCell(c,i) && !markedHere;
+    const blocked = canPick && !pickable && c!=="free" && !markedHere;
+    return `<div class="bingoCell ${c==="free"?"free":""} ${pickable?"pickableCell":""} ${blocked?"blockedCell":""}" data-index="${i}" data-color="${c}">
+      ${markedHere?"✅":emoji(c)}
+    </div>`;
+  }).join("");
+
+  document.querySelectorAll(".pickableCell").forEach(el=>{
+    el.addEventListener("click",()=>markBingoCell(Number(el.dataset.index)));
+  });
+}
+
+// Override renderCard to support pickable cells
+renderCard = renderCardV3;
+
+function listenPlayerResultStatus(){
+  if(!db||!currentRoomCode||!currentPlayerId) return;
+
+  db.ref("rooms/"+currentRoomCode).on("value", snap=>{
+    const room=snap.val()||{};
+    const round=room.currentRound||{};
+    if(!round.id) return;
+
+    const correct=room.correct && room.correct[round.id] ? room.correct[round.id][currentPlayerId] : undefined;
+    const player=room.players && room.players[currentPlayerId] ? room.players[currentPlayerId] : {};
+    const card=player.card||[];
+    const marked=player.marked||{};
+
+    window.__playerIsCorrect = correct===true;
+
+    if(round.status==="judged"){
+      if(correct===true){
+        $("answerStatus").innerHTML=`✅ Goed! Kies 1 ${round.colorEmoji} ${round.colorName} vakje op je bingokaart.`;
+      }else if(correct===false){
+        $("answerStatus").textContent="❌ Helaas, geen vakje deze ronde.";
+      }else{
+        $("answerStatus").textContent="Wachten op beoordeling van de host.";
+      }
+      renderCardV3(card, marked);
+    }
+  });
+}
+
+// Patch player round render: ready means wachten op muziek, answering means input open
+const oldRenderPlayerRoundV3 = renderPlayerRound;
+renderPlayerRound = function(round){
+  activePlayerRound=round;
+  window.__playerPickedThisRound=false;
+
+  if(!$("playerAnswerPanel")) return;
+  $("playerAnswerPanel").classList.remove("hidden");
+
+  if(!round||!round.id){
+    $("playerRoundInfo").textContent="Wachten op ronde...";
+    $("timerBox").textContent="⏱️ --";
+    $("playerAnswerInput").disabled=true;
+    $("submitAnswerBtn").disabled=true;
+    return;
+  }
+
+  $("playerRoundInfo").textContent=(round.colorEmoji||"")+" "+(round.colorName||"")+" — "+(round.category||"");
+
+  if(round.status==="ready"){
+    clearInterval(playerTimerInterval);
+    $("timerBox").textContent="⏱️ Wacht op muziek";
+    $("playerAnswerInput").value="";
+    $("playerAnswerInput").disabled=true;
+    $("submitAnswerBtn").disabled=true;
+    $("answerStatus").textContent="De host moet het nummer nog starten.";
+    return;
+  }
+
+  oldRenderPlayerRoundV3(round);
 };
 
-// Forceer ronde-sync na elke START RONDE klik.
-// Dit staat los van de eerdere ronde-sync, zodat spelers zeker een ronde krijgen.
-setTimeout(() => {
-  const btn = $("startBtn");
-  if(btn){
-    btn.addEventListener("click", () => {
-      setTimeout(sendRoundToPlayersForced, 3200);
-    });
+setTimeout(()=>{
+  const start=$("startBtn");
+  if(start){
+    start.onclick=null;
+    start.replaceWith(start.cloneNode(true));
+    $("startBtn").addEventListener("click", startRoundV3);
   }
-}, 0);
+
+  const play=$("playBtn");
+  if(play){
+    play.onclick=null;
+    play.replaceWith(play.cloneNode(true));
+    $("playBtn").addEventListener("click", playHiddenV3);
+  }
+
+  if($("publishResultsBtn")){
+    $("publishResultsBtn").addEventListener("click", publishResultsToPlayers);
+  }
+
+  listenPlayerResultStatus();
+},50);
+
+
+/* =========================
+   SPELERSMODULE V4: SPELERS ZIEN ELKAARS ANTWOORDEN
+   ========================= */
+
+function playerMaySeeAnswers(room, round){
+  if(!round || !round.id) return false;
+  const answer = room.answers && room.answers[round.id] ? room.answers[round.id][currentPlayerId] : null;
+  return !!answer || round.status === "locked" || round.status === "judged";
+}
+
+function renderPlayerAnswersOverview(room){
+  if(!$("playerAnswersOverviewPanel") || !$("playerAnswersOverview")) return;
+
+  const round = room.currentRound || {};
+  if(!round.id){
+    $("playerAnswersOverviewPanel").classList.add("hidden");
+    return;
+  }
+
+  if(!playerMaySeeAnswers(room, round)){
+    $("playerAnswersOverviewPanel").classList.add("hidden");
+    return;
+  }
+
+  $("playerAnswersOverviewPanel").classList.remove("hidden");
+
+  const players = room.players || {};
+  const answers = room.answers && room.answers[round.id] ? room.answers[round.id] : {};
+  const correct = room.correct && room.correct[round.id] ? room.correct[round.id] : {};
+
+  const rows = Object.entries(players).map(([pid, p]) => {
+    const ans = answers[pid] && answers[pid].answer ? answers[pid].answer : "Geen antwoord";
+    let verdict = "";
+    if(round.status === "judged"){
+      if(correct[pid] === true) verdict = " ✅";
+      else if(correct[pid] === false) verdict = " ❌";
+    }
+    return `<div class="playerAnswerRow">
+      <strong>${esc(p.name || "Speler")}${pid === currentPlayerId ? " (jij)" : ""}</strong>
+      <span class="${ans === "Geen antwoord" ? "playerAnswerHidden" : ""}">${esc(ans)}${verdict}</span>
+    </div>`;
+  }).join("");
+
+  $("playerAnswersOverview").innerHTML = rows || "Nog geen spelers.";
+}
+
+// Breid bestaande speler-room-listener uit met antwoordoverzicht
+const oldListenPlayerResultStatusV4 = listenPlayerResultStatus;
+listenPlayerResultStatus = function(){
+  oldListenPlayerResultStatusV4();
+
+  if(!db || !currentRoomCode) return;
+  db.ref("rooms/" + currentRoomCode).on("value", snap => {
+    const room = snap.val() || {};
+    renderPlayerAnswersOverview(room);
+  });
+};
+
+// Zorg dat overzicht direct verschijnt na insturen
+const oldSubmitPlayerAnswerV4 = submitPlayerAnswer;
+submitPlayerAnswer = function(){
+  oldSubmitPlayerAnswerV4();
+  setTimeout(() => {
+    if(db && currentRoomCode){
+      db.ref("rooms/" + currentRoomCode).once("value").then(s => {
+        renderPlayerAnswersOverview(s.val() || {});
+      });
+    }
+  }, 500);
+};
+
+// Wire opnieuw, omdat submitPlayerAnswer overschreven is
+setTimeout(() => {
+  const btn = $("submitAnswerBtn");
+  if(btn){
+    btn.replaceWith(btn.cloneNode(true));
+    $("submitAnswerBtn").addEventListener("click", submitPlayerAnswer);
+  }
+}, 100);

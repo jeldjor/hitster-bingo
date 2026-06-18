@@ -73,6 +73,7 @@
       <p id="hostRoundInfo" class="small"></p>
       <div id="hostAnswersList" class="small">Nog geen antwoorden.</div>
       <button id="lockRoundBtn" class="secondary">🔒 Antwoorden vergrendelen</button>
+      <button id="publishResultsBtn">✅ Resultaten naar spelers sturen</button>
     </div>
   </section>
 
@@ -98,6 +99,12 @@
     <input id="playerAnswerInput" placeholder="Typ je antwoord">
     <button id="submitAnswerBtn">Verstuur antwoord</button>
     <p id="answerStatus" class="small"></p>
+  </section>
+
+  <section class="panel hidden" id="playerAnswersOverviewPanel">
+    <h2>👀 Antwoorden van iedereen</h2>
+    <p class="small">Je ziet dit pas nadat je zelf hebt ingestuurd of als de tijd voorbij is.</p>
+    <div id="playerAnswersOverview" class="small">Nog geen antwoorden zichtbaar.</div>
   </section>
 
   <section class="panel hostOnly">
