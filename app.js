@@ -42,18 +42,89 @@ function showHostRoom(code){
   $("roomCodeText").textContent=code;
   const url=location.origin+location.pathname+"?room="+encodeURIComponent(code);
   $("joinLink").value=url;
+
+  const qrUrl1 = "https://quickchart.io/qr?size=260&text=" + encodeURIComponent(url);
+  const qrUrl2 = "https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=" + encodeURIComponent(url);
+
   const qr=$("qrImage");
+  const open=$("openQrLink");
+
+  if(open){
+    open.href = qrUrl1;
+    open.textContent = "Open QR-code";
+  }
+
   if(qr){
-    qr.src="https://api.qrserver.com/v1/create-qr-code/?size=260x260&data="+encodeURIComponent(url);
+    qr.style.display = "inline-block";
+    qr.onerror = function(){
+      if(qr.src !== qrUrl2){
+        qr.src = qrUrl2;
+        if(open) open.href = qrUrl2;
+      } else {
+        qr.style.display = "none";
+        let msg=document.getElementById("qrFallbackMsg");
+        if(!msg){
+          msg=document.createElement("div");
+          msg.id="qrFallbackMsg";
+          msg.className="qrError";
+          msg.innerHTML="QR-code kon niet geladen worden. Gebruik de link hieronder of tik op <strong>Open QR-code</strong>.";
+          $("roomInfo").appendChild(msg);
+        }
+      }
+    };
+    qr.src = qrUrl1;
   }
 }
 function listenPlayers(code){db.ref("rooms/"+code+"/players").on("value",s=>{const ps=Object.values(s.val()||{});$("playersList").innerHTML=ps.length?ps.map(p=>`<div class="playerItem"><strong>${esc(p.name||"Speler")}</strong><span>${p.online?"🟢 online":"⚪ weg"}</span></div>`).join(""):"Nog geen spelers."})}
-function setupJoin(){const room=new URLSearchParams(location.search).get("room");if(!room)return;currentRoomCode=room.toUpperCase();document.querySelectorAll(".hostOnly").forEach(el=>el.classList.add("hidden"));$("playerJoinPanel").classList.remove("hidden");$("playerRoomCode").textContent=currentRoomCode;if(currentPlayerName)$("playerNameInput").value=currentPlayerName;if(localStorage.getItem("hb_player_room")===currentRoomCode&&currentPlayerId&&currentPlayerName)joinRoom(true)}
-function joinRoom(re=false){if(!db){alert("Firebase niet actief.");return}const name=($("playerNameInput").value||currentPlayerName||"").trim();if(!name){alert("Vul eerst je naam in.");return}if(!currentPlayerId)currentPlayerId=playerId();currentPlayerName=name;localStorage.setItem("hb_player_id",currentPlayerId);localStorage.setItem("hb_player_name",name);localStorage.setItem("hb_player_room",currentRoomCode);const ref=db.ref("rooms/"+currentRoomCode+"/players/"+currentPlayerId);ref.once("value").then(s=>{const ex=s.val()||{};return ref.update({name,online:true,joinedAt:ex.joinedAt||firebase.database.ServerValue.TIMESTAMP,lastSeen:firebase.database.ServerValue.TIMESTAMP,card:ex.card||genCard(),marked:ex.marked||{}})}).then(()=>{ref.child("online").onDisconnect().set(false);ref.child("lastSeen").onDisconnect().set(firebase.database.ServerValue.TIMESTAMP);$("joinStatus").textContent=re?"Welkom terug, "+name+"!":"Je doet mee, "+name+"!";showPlayerCard();listenPlayer()}).catch(e=>showError("Meedoen mislukt: "+e.message))}
-function showPlayerCard(){$("playerCardPanel").classList.remove("hidden");$("playerNameView").textContent="Speler: "+currentPlayerName;db.ref("rooms/"+currentRoomCode).once("value").then(s=>{const r=s.val()||{},p=r.players?.[currentPlayerId]||{};renderCard(p.card||[],p.marked||{});renderCats(r.categories||{})})}
+function setupJoin(){
+  const room=new URLSearchParams(location.search).get("room");
+  if(!room)return;
+
+  document.body.classList.add("playerMode");
+  currentRoomCode=room.toUpperCase();
+
+  document.querySelectorAll(".hostOnly").forEach(el=>{
+    el.classList.add("hidden");
+    el.style.display="none";
+  });
+
+  $("playerJoinPanel").classList.remove("hidden");
+  $("playerRoomCode").textContent=currentRoomCode;
+
+  if(currentPlayerName) $("playerNameInput").value=currentPlayerName;
+
+  const savedRoom=localStorage.getItem("hb_player_room");
+  if(savedRoom===currentRoomCode&&currentPlayerId&&currentPlayerName){
+    joinRoom(true);
+  }
+}
+function joinRoom(re=false){
+  if(!currentRoomCode){
+    alert("Geen spelcode gevonden. Open de link van de host opnieuw.");
+    return;
+  }
+  if(!db){alert("Firebase niet actief.");return}
+  const name=($("playerNameInput").value||currentPlayerName||"").trim();
+  if(!name){alert("Vul eerst je naam in.");return}
+  $("joinStatus").textContent="Bezig met verbinden...";if(!currentPlayerId)currentPlayerId=playerId();currentPlayerName=name;localStorage.setItem("hb_player_id",currentPlayerId);localStorage.setItem("hb_player_name",name);localStorage.setItem("hb_player_room",currentRoomCode);const ref=db.ref("rooms/"+currentRoomCode+"/players/"+currentPlayerId);ref.once("value").then(s=>{const ex=s.val()||{};return ref.update({name,online:true,joinedAt:ex.joinedAt||firebase.database.ServerValue.TIMESTAMP,lastSeen:firebase.database.ServerValue.TIMESTAMP,card:ex.card||genCard(),marked:ex.marked||{}})}).then(()=>{ref.child("online").onDisconnect().set(false);ref.child("lastSeen").onDisconnect().set(firebase.database.ServerValue.TIMESTAMP);$("joinStatus").textContent=re?"Welkom terug, "+name+"!":"Je doet mee, "+name+"!";showPlayerCard();listenPlayer()}).catch(e=>showError("Meedoen mislukt: "+e.message))}
+function showPlayerCard(){$("playerCardPanel").classList.remove("hidden");$("playerNameView").textContent="Speler: "+currentPlayerName;db.ref("rooms/"+currentRoomCode).once("value").then(s=>{const r=s.val()||{},p=(r.players&&r.players[currentPlayerId])?r.players[currentPlayerId]:{};renderCard(p.card||[],p.marked||{});renderCats(r.categories||{})})}
 function renderCard(card,marked){$("bingoCard").innerHTML=card.map((c,i)=>`<div class="bingoCell ${c==="free"?"free":""}" data-index="${i}">${marked&&marked[i]?"✅":emoji(c)}</div>`).join("")}
 function renderCats(c){$("playerCategories").innerHTML=`<div>🟨 Geel = ${esc(c.yellow||"-")}</div><div>🩷 Roze = ${esc(c.pink||"-")}</div><div>🟪 Paars = ${esc(c.purple||"-")}</div><div>🟦 Blauw = ${esc(c.blue||"-")}</div><div>🟩 Groen = ${esc(c.green||"-")}</div>`}
 function listenPlayer(){db.ref("rooms/"+currentRoomCode+"/players/"+currentPlayerId).on("value",s=>{const p=s.val();if(p)renderCard(p.card||[],p.marked||{})});db.ref("rooms/"+currentRoomCode+"/categories").on("value",s=>renderCats(s.val()||{}))}
 
 $("loginBtn")?.addEventListener("click",login);$("logoutBtn")?.addEventListener("click",logout);$("activateBtn")?.addEventListener("click",activatePlayer);$("csvFile")?.addEventListener("change",handleCsvFile);$("clearCsvBtn")?.addEventListener("click",clearCsv);$("resetUsedBtn")?.addEventListener("click",resetUsed);$("startBtn")?.addEventListener("click",startRound);$("playBtn")?.addEventListener("click",playHidden);$("stopBtn")?.addEventListener("click",stopPlayback);$("answerBtn")?.addEventListener("click",showAnswer);$("newRoomBtn")?.addEventListener("click",createRoom);$("joinRoomBtn")?.addEventListener("click",()=>joinRoom(false));
 initFirebase();handleRedirect().then(updateStatus).catch(e=>showError(e.message));setupJoin();const saved=localStorage.getItem("hb_host_room");if(saved&&!new URLSearchParams(location.search).get("room")){currentRoomCode=saved;showHostRoom(saved);listenPlayers(saved)}
+
+
+setTimeout(() => {
+  const room = new URLSearchParams(location.search).get("room");
+  if(room && $("playerJoinPanel")){
+    document.body.classList.add("playerMode");
+    document.querySelectorAll(".hostOnly").forEach(el => {
+      el.classList.add("hidden");
+      el.style.display = "none";
+    });
+    $("playerJoinPanel").classList.remove("hidden");
+    $("playerRoomCode").textContent = room.toUpperCase();
+  }
+}, 500);

@@ -10,6 +10,11 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
 </head>
 <body>
+<script>
+  if (new URLSearchParams(window.location.search).get("room")) {
+    document.body.classList.add("playerMode");
+  }
+</script>
 <div class="app">
   <header>
     <h1>🎵 Hitster Bingo</h1>
@@ -54,6 +59,7 @@
     <div id="roomInfo" class="roomBox hidden">
       <h3>Spelcode: <span id="roomCodeText"></span></h3>
       <img id="qrImage" alt="QR-code om mee te doen">
+      <a id="openQrLink" class="qrButton" target="_blank" rel="noopener">Open QR-code</a>
       <p class="small">Spelers scannen deze QR-code of openen de link.</p>
       <input id="joinLink" readonly>
     </div>
@@ -66,7 +72,7 @@
   <section class="panel hidden" id="playerJoinPanel">
     <h2>🎫 Meedoen</h2>
     <p>Spelcode: <strong id="playerRoomCode"></strong></p>
-    <input id="playerNameInput" placeholder="Vul je naam in">
+    <label><span>Jouw naam</span><input id="playerNameInput" placeholder="Bijv. Jan"></label>
     <button id="joinRoomBtn">Meedoen</button>
     <p id="joinStatus" class="small"></p>
   </section>

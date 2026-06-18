@@ -28,3 +28,40 @@ button:disabled{opacity:.45;cursor:not-allowed}.secondary{background:rgba(255,25
 .categoryLegend{max-width:430px;margin:0 auto;text-align:left;background:rgba(255,255,255,.1);border-radius:18px;padding:14px;font-size:18px}.categoryLegend div{padding:5px 0}
 .flash{position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle,rgba(255,255,255,.55),transparent 45%);animation:fade .7s ease-out forwards}@keyframes fade{to{opacity:0}}
 @media(max-width:650px){h1{font-size:32px}.disco{width:220px;height:220px}.wheelWrap{width:270px;height:270px}.wheel{width:270px;height:270px}.wheel:after{top:97px;left:97px}.colorName{font-size:42px}.category{font-size:24px}.bingoCell{font-size:26px;border-radius:12px}}
+
+.qrButton{
+  display:inline-block;
+  margin-top:10px;
+  padding:12px 16px;
+  border-radius:14px;
+  background:white;
+  color:#14001f;
+  font-weight:900;
+  text-decoration:none;
+}
+.qrError{
+  background:#ffe0e0;
+  color:#300;
+  padding:10px;
+  border-radius:12px;
+  margin-top:10px;
+}
+
+
+body.playerMode .hostOnly{
+  display:none !important;
+}
+
+body.playerMode header p::after{
+  content:"Spelermodus";
+  display:block;
+  margin-top:8px;
+  font-weight:900;
+}
+
+body.playerMode #playerJoinPanel,
+body.playerMode #playerCardPanel{
+  max-width:600px;
+  margin-left:auto;
+  margin-right:auto;
+}
