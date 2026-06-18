@@ -262,3 +262,135 @@ body.playerMode #playerCardPanel{
 }
 
 /* Clean final extra */
+
+.soundReady{
+  color:#73ff73;
+  font-weight:900;
+}
+
+/* Uitklapbare bingokaarten */
+.cardsToggle{
+  margin-top:14px;
+  background:rgba(255,255,255,.08);
+  border-radius:18px;
+  padding:12px;
+}
+.cardsToggle summary{
+  cursor:pointer;
+  font-size:21px;
+  font-weight:900;
+  list-style:none;
+}
+.cardsToggle summary::-webkit-details-marker{
+  display:none;
+}
+.cardsToggle summary:after{
+  content:" +";
+  float:right;
+}
+.cardsToggle[open] summary:after{
+  content:" −";
+}
+.cardsOverview{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:14px;
+  margin-top:14px;
+}
+.miniPlayerCard{
+  background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:16px;
+  padding:10px;
+}
+.miniPlayerName{
+  font-weight:900;
+  margin-bottom:8px;
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+}
+.miniBingoGrid{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:4px;
+}
+.miniBingoCell{
+  aspect-ratio:1/1;
+  border-radius:7px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:18px;
+  background:rgba(255,255,255,.12);
+}
+.miniBingoCell.marked{
+  background:rgba(115,255,115,.28);
+  box-shadow:0 0 0 2px rgba(115,255,115,.45) inset;
+}
+.miniProgress{
+  opacity:.8;
+  font-size:13px;
+  white-space:nowrap;
+}
+@media(max-width:650px){
+  .cardsOverview{grid-template-columns:1fr 1fr}
+  .miniBingoCell{font-size:15px}
+}
+
+/* Scoreboard naam klikbaar + kaart onder speler */
+.clickableName{
+  cursor:pointer;
+  text-decoration:underline;
+  text-underline-offset:4px;
+}
+.inlineMiniCard{
+  grid-column:1 / -1;
+  margin-top:8px;
+  background:rgba(0,0,0,.18);
+  border-radius:14px;
+  padding:10px;
+}
+.inlineMiniCard .miniBingoGrid{
+  max-width:230px;
+}
+
+/* Player popup flow */
+.modalOverlay{
+  position:fixed;
+  inset:0;
+  z-index:10000;
+  background:rgba(0,0,0,.78);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+}
+.modalCard{
+  width:min(560px, 100%);
+  max-height:90vh;
+  overflow:auto;
+  background:#160021;
+  border:2px solid rgba(255,255,255,.22);
+  border-radius:28px;
+  padding:22px;
+  box-shadow:0 25px 80px rgba(0,0,0,.65), 0 0 45px rgba(255,79,147,.22);
+  position:relative;
+}
+.modalLarge{
+  width:min(760px, 100%);
+}
+.modalClose{
+  position:absolute;
+  top:10px;
+  right:10px;
+  width:44px;
+  height:44px;
+  padding:0;
+  border-radius:50%;
+  font-size:30px;
+  line-height:1;
+}
+body.modalOpen{
+  overflow:hidden;
+}

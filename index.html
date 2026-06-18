@@ -56,6 +56,8 @@
     <h2>4. Spelersmodule</h2>
     <label><input type="checkbox" id="playerModuleOn" checked> Spelersmodule gebruiken</label>
     <button id="newRoomBtn" class="secondary">🎫 Nieuw spel / kamer maken</button>
+    <button id="activateHostSoundBtn" class="secondary">🔊 Activeer host-geluid</button>
+    <p id="hostSoundStatus" class="small">Geluid nog niet geactiveerd.</p>
     <div id="roomInfo" class="roomBox hidden">
       <h3>Spelcode: <span id="roomCodeText"></span></h3>
       <img id="qrImage" alt="QR-code om mee te doen">
@@ -113,19 +115,56 @@
     <div id="playerAnswersOverview" class="scoreBoard">Nog geen antwoorden zichtbaar.</div>
   </section>
 
+  <section class="panel hidden" id="playerCardsOverviewPanel">
+    <details class="cardsToggle">
+      <summary>👀 Bingokaarten van iedereen bekijken</summary>
+      <div id="playerCardsOverview" class="cardsOverview small">Nog geen kaarten.</div>
+    </details>
+  </section>
+
   <section class="panel hidden" id="winnerPanel">
     <div id="winnerMessage" class="winnerBanner">🏆</div>
   </section>
+
+  <div id="playerAnswerModal" class="modalOverlay hidden">
+    <div class="modalCard">
+      <h2>✍️ Vul je antwoord in</h2>
+      <p id="modalRoundInfo" class="small"></p>
+      <div id="modalTimerBox" class="timerBox">⏱️ --</div>
+      <input id="modalAnswerInput" placeholder="Typ je antwoord">
+      <button id="modalSubmitAnswerBtn">Verstuur antwoord</button>
+      <p id="modalAnswerStatus" class="small"></p>
+    </div>
+  </div>
+
+  <div id="playerScoreboardModal" class="modalOverlay hidden">
+    <div class="modalCard modalLarge">
+      <button id="closeScoreboardModalBtn" class="modalClose">×</button>
+      <h2>📊 Scorebord ronde</h2>
+      <div id="modalCorrectAnswerBox" class="correctAnswerBox hidden"></div>
+      <div id="modalPlayerAnswersOverview" class="scoreBoard">Nog geen antwoorden zichtbaar.</div>
+    </div>
+  </div>
+
+  <div id="playerPickCardModal" class="modalOverlay hidden">
+    <div class="modalCard modalLarge">
+      <h2>✅ Kies je vakje</h2>
+      <p id="modalPickInfo" class="small"></p>
+      <div id="modalBingoCard" class="bingoCard"></div>
+    </div>
+  </div>
 
   <section class="panel hostOnly">
     <h2>5. Instellingen</h2>
     <div class="settings">
       <label>Fragment
         <select id="duration">
-          <option value="5">5 seconden</option>
           <option value="10">10 seconden</option>
           <option value="20" selected>20 seconden</option>
           <option value="30">30 seconden</option>
+          <option value="40">40 seconden</option>
+          <option value="50">50 seconden</option>
+          <option value="60">60 seconden</option>
         </select>
       </label>
       <label><input type="checkbox" id="randomStart" checked> Random startpunt</label>

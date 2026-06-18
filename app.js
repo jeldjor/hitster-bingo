@@ -1862,3 +1862,709 @@ setTimeout(() => {
     roomNew.addEventListener("click", createRoom);
   }
 }, 300);
+
+
+/* =========================
+   BINGO GELUID FIX
+   iPhone/Safari vereist eerst een klik om audio/spraak te activeren
+   ========================= */
+
+let hbAudioCtx = null;
+let hbHostSoundReady = false;
+
+function getHbAudioCtx(){
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if(!AudioContext) return null;
+  if(!hbAudioCtx) hbAudioCtx = new AudioContext();
+  return hbAudioCtx;
+}
+
+async function activateHostSound(){
+  try{
+    const ctx = getHbAudioCtx();
+    if(ctx && ctx.state === "suspended") await ctx.resume();
+
+    // Heel kort stil geluidje om audio op iPhone te unlocken
+    if(ctx){
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.001;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.05);
+    }
+
+    // Speech ook alvast wakker maken
+    if("speechSynthesis" in window){
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance("Geluid actief.");
+      u.lang = "nl-NL";
+      u.volume = 0.01;
+      window.speechSynthesis.speak(u);
+    }
+
+    hbHostSoundReady = true;
+    localStorage.setItem("hb_host_sound_ready","1");
+
+    const s = document.getElementById("hostSoundStatus");
+    if(s){
+      s.textContent = "✅ Host-geluid actief.";
+      s.classList.add("soundReady");
+    }
+  }catch(e){
+    alert("Geluid activeren mislukt: " + e.message);
+  }
+}
+
+function playTuneFixed(){
+  try{
+    const ctx = getHbAudioCtx();
+    if(!ctx) return;
+
+    if(ctx.state === "suspended"){
+      ctx.resume();
+    }
+
+    const notes = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = freq;
+      osc.type = "sine";
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const start = ctx.currentTime + i * 0.16;
+      gain.gain.setValueAtTime(0.001, start);
+      gain.gain.exponentialRampToValueAtTime(0.35, start + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.14);
+      osc.start(start);
+      osc.stop(start + 0.16);
+    });
+  }catch(e){
+    console.log("Tune error", e);
+  }
+}
+
+function speakWinnerFixed(name){
+  try{
+    if(!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+
+    const text = "Aiiii mi hende. Speler " + name + " heeft bingo!";
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "nl-NL";
+    u.rate = 0.86;
+    u.pitch = 1.05;
+    u.volume = 1;
+
+    // kleine vertraging zodat tune eerst start
+    setTimeout(() => {
+      window.speechSynthesis.speak(u);
+    }, 650);
+  }catch(e){
+    console.log("Speech error", e);
+  }
+}
+
+// Override oude functies
+playTune = playTuneFixed;
+speakWinner = speakWinnerFixed;
+
+// Override showWinner zodat audio geforceerd start op host
+const oldShowWinnerSoundFix = showWinner;
+showWinner = function(name){
+  oldShowWinnerSoundFix(name);
+
+  // extra poging voor host-speaker
+  setTimeout(() => playTuneFixed(), 100);
+  setTimeout(() => speakWinnerFixed(name), 900);
+
+  const s = document.getElementById("hostSoundStatus");
+  if(s && !hbHostSoundReady){
+    s.textContent = "⚠️ Geen geluid? Tik eerst op 'Activeer host-geluid'.";
+  }
+};
+
+// Extra robuuste bingo-listener opnieuw starten
+function restartBingoListenerSoundFix(){
+  const room = currentRoomCode || localStorage.getItem("hb_host_room") || localStorage.getItem("hb_player_room") || "";
+  if(db && room){
+    try{ listenBingo(room); }catch(e){}
+  }
+}
+
+setTimeout(() => {
+  const btn = document.getElementById("activateHostSoundBtn");
+  if(btn) btn.addEventListener("click", activateHostSound);
+
+  if(localStorage.getItem("hb_host_sound_ready")==="1"){
+    const s = document.getElementById("hostSoundStatus");
+    if(s){
+      s.textContent = "✅ Host-geluid eerder geactiveerd. Tik opnieuw als Safari geen geluid geeft.";
+      s.classList.add("soundReady");
+    }
+  }
+
+  restartBingoListenerSoundFix();
+}, 500);
+
+
+/* =========================
+   UITKLAPBARE BINGOKAARTEN OVERZICHT
+   ========================= */
+
+function countMarkedCells(marked){
+  let count = 1; // middenvak is gratis
+  if(marked){
+    Object.keys(marked).forEach(k => {
+      if(Number(k) !== 12 && marked[k]) count++;
+    });
+  }
+  return count;
+}
+
+function renderMiniCard(player){
+  const card = player.card || [];
+  const marked = player.marked || {};
+  const markedCount = countMarkedCells(marked);
+
+  const cells = card.map((c, i) => {
+    const isMarked = marked && marked[i];
+    return `<div class="miniBingoCell ${isMarked || i === 12 ? "marked" : ""}">
+      ${isMarked ? "✅" : emoji(c)}
+    </div>`;
+  }).join("");
+
+  return `<div class="miniPlayerCard">
+    <div class="miniPlayerName">
+      <span>${esc(player.name || "Speler")}</span>
+      <span class="miniProgress">${markedCount}/25</span>
+    </div>
+    <div class="miniBingoGrid">${cells}</div>
+  </div>`;
+}
+
+function renderCardsOverview(room){
+  const players = room.players || {};
+  const cardsHtml = Object.values(players).map(renderMiniCard).join("") || "Nog geen spelers.";
+
+  if(document.getElementById("hostCardsOverview")){
+    document.getElementById("hostCardsOverview").innerHTML = cardsHtml;
+  }
+
+  if(document.getElementById("playerCardsOverview")){
+    document.getElementById("playerCardsOverviewPanel")?.classList.remove("hidden");
+    document.getElementById("playerCardsOverview").innerHTML = cardsHtml;
+  }
+}
+
+// Host kaarten live volgen
+function listenCardsForHost(roomCode){
+  if(!db || !roomCode) return;
+  db.ref("rooms/" + roomCode).on("value", snap => {
+    renderCardsOverview(snap.val() || {});
+  });
+}
+
+// Koppel aan bestaande listeners
+const originalListenPlayersCards = listenPlayers;
+listenPlayers = function(code){
+  originalListenPlayersCards(code);
+  listenCardsForHost(code);
+};
+
+// Speler krijgt kaarten ook via bestaande listenPlayer room snapshot.
+// Override listenPlayer minimaal om cards overview te renderen.
+const originalListenPlayerCards = listenPlayer;
+listenPlayer = function(){
+  db.ref("rooms/" + currentRoomCode).on("value", snap => {
+    renderCardsOverview(snap.val() || {});
+  });
+  originalListenPlayerCards();
+};
+
+// Als er al een host room actief is bij laden
+setTimeout(() => {
+  const room = currentRoomCode || localStorage.getItem("hb_host_room") || localStorage.getItem("hb_player_room") || "";
+  if(db && room){
+    listenCardsForHost(room);
+  }
+}, 1000);
+
+
+/* =========================
+   SCOREBOARD NAAM KLIK -> BINGOKAART
+   ========================= */
+
+let openedScoreCards = {};
+
+function toggleScoreCard(playerId){
+  openedScoreCards[playerId] = !openedScoreCards[playerId];
+
+  const room = currentRoomCode || localStorage.getItem("hb_host_room") || localStorage.getItem("hb_player_room") || "";
+  if(db && room){
+    db.ref("rooms/" + room).once("value").then(snap => {
+      const data = snap.val() || {};
+      if(document.getElementById("hostAnswersList")) renderHostScoreboardWithCards(data);
+      if(document.getElementById("playerAnswersOverview")) renderPlayerScoreboardWithCards(data);
+    });
+  }
+}
+
+function miniCardInline(player){
+  const card = player.card || [];
+  const marked = player.marked || {};
+  const cells = card.map((c, i) => {
+    const isMarked = marked && marked[i];
+    return `<div class="miniBingoCell ${isMarked || i === 12 ? "marked" : ""}">
+      ${isMarked ? "✅" : emoji(c)}
+    </div>`;
+  }).join("");
+
+  return `<div class="inlineMiniCard">
+    <div class="miniBingoGrid">${cells}</div>
+  </div>`;
+}
+
+function renderHostScoreboardWithCards(room){
+  const round = room.currentRound || {};
+  const rid = round.id || hostAnswerRoundId;
+  if(!rid || !document.getElementById("hostAnswersList")) return;
+
+  const players = room.players || {};
+  const answers = room.answers && room.answers[rid] ? room.answers[rid] : {};
+  const correct = room.correct && room.correct[rid] ? room.correct[rid] : {};
+
+  document.getElementById("hostAnswersList").innerHTML = Object.entries(players).map(([pid,p]) => {
+    const ans = answers[pid] ? answers[pid].answer : "Geen antwoord";
+    const st = correct[pid];
+    const cls = st === true ? "scoreGood" : st === false ? "scoreBad" : "scorePending";
+    const opened = openedScoreCards[pid];
+
+    return `<div class="scoreCard ${cls}">
+      <div class="scoreName clickableName" onclick="toggleScoreCard('${pid}')">
+        ${opened ? "▼" : "▶"} ${esc(p.name || "Speler")}
+      </div>
+      <div class="scoreAnswer">${esc(ans || "Geen antwoord")}</div>
+      <div>
+        <button class="goodBtn ${st===true?"goodSelected":""}" onclick="event.stopPropagation(); markAnswer('${pid}', true)">✅</button>
+        <button class="badBtn ${st===false?"badSelected":""}" onclick="event.stopPropagation(); markAnswer('${pid}', false)">❌</button>
+      </div>
+      ${opened ? miniCardInline(p) : ""}
+    </div>`;
+  }).join("") || "Nog geen spelers.";
+}
+
+function renderPlayerScoreboardWithCards(room){
+  const round = room.currentRound || {};
+  if(!round.id || !document.getElementById("playerAnswersOverview")) return;
+
+  if(typeof playerMaySeeAnswers === "function" && !playerMaySeeAnswers(room, round)){
+    document.getElementById("playerAnswersOverviewPanel")?.classList.add("hidden");
+    return;
+  }
+
+  if(typeof maySee === "function" && !maySee(room)){
+    document.getElementById("playerAnswersOverviewPanel")?.classList.add("hidden");
+    return;
+  }
+
+  document.getElementById("playerAnswersOverviewPanel")?.classList.remove("hidden");
+
+  const players = room.players || {};
+  const answers = room.answers && room.answers[round.id] ? room.answers[round.id] : {};
+  const correct = room.correct && room.correct[round.id] ? room.correct[round.id] : {};
+
+  document.getElementById("playerAnswersOverview").innerHTML = Object.entries(players).map(([pid,p]) => {
+    const ans = answers[pid] && answers[pid].answer ? answers[pid].answer : "Geen antwoord";
+    const st = round.status === "judged" ? correct[pid] : undefined;
+    const cls = st === true ? "scoreGood" : st === false ? "scoreBad" : "scorePending";
+    const icon = st === true ? "✅" : st === false ? "❌" : "⏳";
+    const opened = openedScoreCards[pid];
+
+    return `<div class="scoreCard ${cls}">
+      <div class="scoreName clickableName" onclick="toggleScoreCard('${pid}')">
+        ${opened ? "▼" : "▶"} ${esc(p.name || "Speler")}${pid === currentPlayerId ? " (jij)" : ""}
+      </div>
+      <div class="scoreAnswer">${esc(ans)}</div>
+      <div class="scoreStatus">${icon}</div>
+      ${opened ? miniCardInline(p) : ""}
+    </div>`;
+  }).join("") || "Nog geen spelers.";
+}
+
+// Override host-listener voor scorebord
+if(typeof listenAnswers === "function"){
+  const originalListenAnswersClickableCards = listenAnswers;
+  listenAnswers = function(room, rid){
+    hostAnswerRoundId = rid;
+    db.ref("rooms/" + room).on("value", snap => {
+      const data = snap.val() || {};
+      const round = data.currentRound || {};
+      if(document.getElementById("hostRoundInfo")){
+        document.getElementById("hostRoundInfo").textContent =
+          `${round.colorEmoji || ""} ${round.colorName || ""} — ${round.category || ""} — status: ${round.status || ""}`;
+      }
+      renderHostScoreboardWithCards(data);
+    });
+  };
+}
+
+// Override speler-scorebord
+if(typeof renderScoreboard === "function"){
+  renderScoreboard = function(room){
+    renderPlayerScoreboardWithCards(room);
+  };
+}
+
+// Maak toggle beschikbaar voor inline onclick
+window.toggleScoreCard = toggleScoreCard;
+
+
+/* =========================
+   SPELER POPUP FLOW
+   ========================= */
+
+let popupLastRoundId = "";
+let popupScoreShownForRound = "";
+let popupPickShownForRound = "";
+
+function showModal(id){
+  const el = document.getElementById(id);
+  if(el){
+    el.classList.remove("hidden");
+    document.body.classList.add("modalOpen");
+  }
+}
+
+function hideModal(id){
+  const el = document.getElementById(id);
+  if(el) el.classList.add("hidden");
+
+  const anyOpen = [...document.querySelectorAll(".modalOverlay")].some(m => !m.classList.contains("hidden"));
+  if(!anyOpen) document.body.classList.remove("modalOpen");
+}
+
+function syncAnswerModal(round){
+  if(!round || !round.id) return;
+
+  const info = document.getElementById("modalRoundInfo");
+  if(info) info.textContent = `${round.colorEmoji || ""} ${round.colorName || ""} — ${round.category || ""}`;
+
+  const source = document.getElementById("playerAnswerInput");
+  const modalInput = document.getElementById("modalAnswerInput");
+  if(source && modalInput && document.activeElement !== modalInput){
+    modalInput.value = source.value || "";
+  }
+}
+
+function openAnswerPopup(round){
+  if(!round || !round.id || round.status !== "answering") return;
+  if(popupLastRoundId !== round.id){
+    popupLastRoundId = round.id;
+    popupScoreShownForRound = "";
+    popupPickShownForRound = "";
+    const mi = document.getElementById("modalAnswerInput");
+    if(mi) mi.value = "";
+  }
+  syncAnswerModal(round);
+  showModal("playerAnswerModal");
+}
+
+function closeAnswerPopup(){
+  hideModal("playerAnswerModal");
+}
+
+function openScoreboardPopup(room){
+  const round = room.currentRound || {};
+  if(!round.id) return;
+  if(popupScoreShownForRound === round.id) return;
+
+  popupScoreShownForRound = round.id;
+  renderScoreboardModal(room);
+  showModal("playerScoreboardModal");
+}
+
+function renderScoreboardModal(room){
+  const round = room.currentRound || {};
+  const box = document.getElementById("modalPlayerAnswersOverview");
+  if(!box || !round.id) return;
+
+  const players = room.players || {};
+  const answers = room.answers && room.answers[round.id] ? room.answers[round.id] : {};
+  const correct = room.correct && room.correct[round.id] ? room.correct[round.id] : {};
+
+  box.innerHTML = Object.entries(players).map(([pid,p]) => {
+    const ans = answers[pid] && answers[pid].answer ? answers[pid].answer : "Geen antwoord";
+    const st = round.status === "judged" ? correct[pid] : undefined;
+    const cls = st === true ? "scoreGood" : st === false ? "scoreBad" : "scorePending";
+    const icon = st === true ? "✅" : st === false ? "❌" : "⏳";
+    const opened = openedScoreCards && openedScoreCards[pid];
+
+    return `<div class="scoreCard ${cls}">
+      <div class="scoreName clickableName" onclick="toggleScoreCard('${pid}')">
+        ${opened ? "▼" : "▶"} ${esc(p.name || "Speler")}${pid === currentPlayerId ? " (jij)" : ""}
+      </div>
+      <div class="scoreAnswer">${esc(ans)}</div>
+      <div class="scoreStatus">${icon}</div>
+      ${opened ? miniCardInline(p) : ""}
+    </div>`;
+  }).join("") || "Nog geen spelers.";
+
+  renderCorrectAnswerModal(room);
+}
+
+function renderCorrectAnswerModal(room){
+  const round = room.currentRound || {};
+  const ans = round.correctAnswer;
+  const box = document.getElementById("modalCorrectAnswerBox");
+  if(!box) return;
+
+  if(!ans){
+    box.classList.add("hidden");
+    box.innerHTML = "";
+    return;
+  }
+
+  box.classList.remove("hidden");
+  box.innerHTML = `<h3>✅ Juiste Spotify-antwoord</h3>
+    <p>🎵 <strong>Track:</strong> ${esc(ans.track || "-")}</p>
+    <p>👤 <strong>Artiest:</strong> ${esc(ans.artist || "-")}</p>
+    <p>📅 <strong>Jaar:</strong> ${esc(ans.year || "-")}</p>
+    <p>💿 <strong>Album:</strong> ${esc(ans.album || "-")}</p>`;
+}
+
+function openPickCardPopup(room){
+  const round = room.currentRound || {};
+  const player = room.players && room.players[currentPlayerId] ? room.players[currentPlayerId] : {};
+  const good = room.correct && room.correct[round.id] ? room.correct[round.id][currentPlayerId] : undefined;
+  const alreadyPicked = player.lastPickedRound === round.id;
+
+  if(!round.id || round.status !== "judged" || good !== true || alreadyPicked) return;
+  if(popupPickShownForRound === round.id) return;
+
+  popupPickShownForRound = round.id;
+  const info = document.getElementById("modalPickInfo");
+  if(info) info.textContent = `Kies 1 ${round.colorEmoji} ${round.colorName} vakje.`;
+
+  renderModalBingoCard(player.card || [], player.marked || {}, round);
+  showModal("playerPickCardModal");
+}
+
+function renderModalBingoCard(card, marked, round){
+  const target = document.getElementById("modalBingoCard");
+  if(!target) return;
+
+  target.innerHTML = card.map((c,i) => {
+    const m = marked && marked[i];
+    const pickable = c === round.colorKey && c !== "free" && !m;
+    const blocked = !pickable && c !== "free" && !m;
+
+    return `<div class="bingoCell ${c==="free"?"free":""} ${pickable?"pickableCell":""} ${blocked?"blockedCell":""}" data-index="${i}">
+      ${m ? "✅" : emoji(c)}
+    </div>`;
+  }).join("");
+
+  target.querySelectorAll(".pickableCell").forEach(el => {
+    el.addEventListener("click", () => {
+      markCell(Number(el.dataset.index));
+      hideModal("playerPickCardModal");
+    });
+  });
+}
+
+// Modal submit gebruikt bestaande submitAnswer flow
+function submitAnswerFromModal(){
+  const mi = document.getElementById("modalAnswerInput");
+  const pi = document.getElementById("playerAnswerInput");
+  if(mi && pi) pi.value = mi.value;
+  submitAnswer();
+
+  const status = document.getElementById("modalAnswerStatus");
+  if(status) status.textContent = "🔒 Antwoord ingeleverd.";
+
+  setTimeout(() => {
+    hideModal("playerAnswerModal");
+    const room = currentRoomCode || localStorage.getItem("hb_player_room") || "";
+    if(db && room){
+      db.ref("rooms/" + room).once("value").then(s => {
+        openScoreboardPopup(s.val() || {});
+      });
+    }
+  }, 500);
+}
+
+// Verbind knoppen
+setTimeout(() => {
+  const submit = document.getElementById("modalSubmitAnswerBtn");
+  if(submit) submit.addEventListener("click", submitAnswerFromModal);
+
+  const close = document.getElementById("closeScoreboardModalBtn");
+  if(close) close.addEventListener("click", () => hideModal("playerScoreboardModal"));
+}, 500);
+
+// Override renderPlayerRound: antwoord-popup opent bij muziekstart
+const originalRenderPlayerRoundPopup = renderPlayerRound;
+renderPlayerRound = function(room, round){
+  originalRenderPlayerRoundPopup(room, round);
+
+  if(round && round.status === "answering"){
+    const existing = room.answers && room.answers[round.id] ? room.answers[round.id][currentPlayerId] : null;
+    if(!existing) openAnswerPopup(round);
+  }
+
+  if(round && (round.status === "locked" || round.status === "judged")){
+    closeAnswerPopup();
+    if(maySee(room)) openScoreboardPopup(room);
+  }
+};
+
+// Override renderScoreboard zodat modal live meeververst als open
+const originalRenderScoreboardPopup = renderScoreboard;
+renderScoreboard = function(room){
+  originalRenderScoreboardPopup(room);
+  if(!document.getElementById("playerScoreboardModal")?.classList.contains("hidden")){
+    renderScoreboardModal(room);
+  }
+};
+
+// Override renderCorrect zodat modal ook het juiste antwoord krijgt
+const originalRenderCorrectPopup = renderCorrect;
+renderCorrect = function(room){
+  originalRenderCorrectPopup(room);
+  renderCorrectAnswerModal(room);
+};
+
+// Override result status: bij goed antwoord kaart-popup openen
+const originalRenderResultStatusPopup = renderResultStatus;
+renderResultStatus = function(room){
+  originalRenderResultStatusPopup(room);
+  openPickCardPopup(room);
+};
+
+// Toggle scorecard moet ook modal verversen
+const originalToggleScoreCardPopup = toggleScoreCard;
+toggleScoreCard = function(playerId){
+  openedScoreCards[playerId] = !openedScoreCards[playerId];
+  const room = currentRoomCode || localStorage.getItem("hb_host_room") || localStorage.getItem("hb_player_room") || "";
+  if(db && room){
+    db.ref("rooms/" + room).once("value").then(snap => {
+      const data = snap.val() || {};
+      if(document.getElementById("hostAnswersList")) renderHostScoreboardWithCards(data);
+      if(document.getElementById("playerAnswersOverview")) renderPlayerScoreboardWithCards(data);
+      renderScoreboardModal(data);
+    });
+  }
+};
+window.toggleScoreCard = toggleScoreCard;
+
+
+/* =========================
+   WACHT OP VAKJES FIX
+   Host kan pas volgende ronde starten als goede spelers hun vakje kozen
+   ========================= */
+
+function getPendingPickPlayers(room){
+  const round = room.currentRound || {};
+  if(!round.id || round.status !== "judged") return [];
+
+  const players = room.players || {};
+  const correct = room.correct && room.correct[round.id] ? room.correct[round.id] : {};
+
+  return Object.entries(players)
+    .filter(([pid,p]) => correct[pid] === true && p.lastPickedRound !== round.id)
+    .map(([pid,p]) => ({id:pid, name:p.name || "Speler"}));
+}
+
+function updateHostNextRoundLock(room){
+  const startBtn = document.getElementById("startBtn");
+  if(!startBtn) return;
+
+  const pending = getPendingPickPlayers(room);
+
+  if(pending.length){
+    startBtn.disabled = true;
+    startBtn.textContent = "⏳ Wachten op vakjes";
+    const names = pending.map(p => p.name).join(", ");
+    if(document.getElementById("roundSyncStatus")){
+      document.getElementById("roundSyncStatus").textContent =
+        "Wachten tot deze spelers hun bingovakje kiezen: " + names;
+    }
+  }else{
+    // Alleen terugzetten als hij door deze lock geblokkeerd was
+    if(startBtn.textContent.includes("Wachten op vakjes")){
+      startBtn.disabled = false;
+      startBtn.textContent = "🎲 START RONDE";
+      if(document.getElementById("roundSyncStatus")){
+        document.getElementById("roundSyncStatus").textContent =
+          "Iedereen is klaar. Je kunt de volgende ronde starten.";
+      }
+    }
+  }
+}
+
+// Override publishResults zodat direct pending players zichtbaar worden
+if(typeof publishResults === "function"){
+  const originalPublishResultsWaitFix = publishResults;
+  publishResults = function(){
+    const result = originalPublishResultsWaitFix.apply(this, arguments);
+    setTimeout(() => {
+      const room = currentRoomCode || localStorage.getItem("hb_host_room") || "";
+      if(db && room){
+        db.ref("rooms/" + room).once("value").then(s => updateHostNextRoundLock(s.val() || {}));
+      }
+    }, 600);
+    return result;
+  };
+}
+
+// Override startRound: als er nog pending spelers zijn, niet starten
+if(typeof startRound === "function"){
+  const originalStartRoundWaitFix = startRound;
+  startRound = function(){
+    const room = currentRoomCode || localStorage.getItem("hb_host_room") || "";
+    if(db && room){
+      db.ref("rooms/" + room).once("value").then(s => {
+        const data = s.val() || {};
+        const pending = getPendingPickPlayers(data);
+        if(pending.length){
+          alert("Wacht nog even. Deze spelers moeten nog een bingovakje kiezen: " + pending.map(p=>p.name).join(", "));
+          updateHostNextRoundLock(data);
+          return;
+        }
+        originalStartRoundWaitFix.apply(this, arguments);
+      });
+      return;
+    }
+    return originalStartRoundWaitFix.apply(this, arguments);
+  };
+}
+
+// Host room live volgen voor lock
+function listenHostPendingPickLock(){
+  const room = currentRoomCode || localStorage.getItem("hb_host_room") || "";
+  if(!db || !room) return;
+  db.ref("rooms/" + room).on("value", snap => {
+    updateHostNextRoundLock(snap.val() || {});
+  });
+}
+
+// Rebind start en publish buttons naar overrides
+setTimeout(() => {
+  const startOld = document.getElementById("startBtn");
+  if(startOld){
+    const startNew = startOld.cloneNode(true);
+    startOld.parentNode.replaceChild(startNew, startOld);
+    startNew.addEventListener("click", startRound);
+  }
+
+  const pubOld = document.getElementById("publishResultsBtn");
+  if(pubOld){
+    const pubNew = pubOld.cloneNode(true);
+    pubOld.parentNode.replaceChild(pubNew, pubOld);
+    pubNew.addEventListener("click", publishResults);
+  }
+
+  listenHostPendingPickLock();
+}, 800);
