@@ -22,7 +22,7 @@ button:disabled{opacity:.45;cursor:not-allowed}.secondary{background:rgba(255,25
 .colorDot{width:140px;height:140px;border-radius:50%;margin:0 auto 12px;box-shadow:0 0 45px currentColor}.colorName{font-size:52px;font-weight:900}.category{font-size:28px;margin-top:10px}
 .answerCard{background:rgba(255,255,255,.13);border-radius:22px;padding:18px;margin-top:16px;text-align:left}.answerCard h3{margin:0 0 6px;font-size:28px}.answerCard p{font-size:20px;margin:7px 0}
 .hidden{display:none!important}.roomBox{margin-top:14px;background:rgba(255,255,255,.12);border-radius:20px;padding:16px;text-align:center}
-#qrCanvas{background:white;padding:12px;border-radius:18px;max-width:240px;width:100%;height:auto}.playersBox{margin-top:14px;background:rgba(255,255,255,.08);border-radius:18px;padding:14px}
+#qrImage{background:white;padding:12px;border-radius:18px;max-width:260px;width:100%;height:auto}.playersBox{margin-top:14px;background:rgba(255,255,255,.08);border-radius:18px;padding:14px}
 .playerItem{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.12);font-size:18px}
 .bingoCard{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;max-width:430px;margin:18px auto}.bingoCell{aspect-ratio:1/1;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:900;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.18)}.bingoCell.free{background:rgba(255,255,255,.28)}
 .categoryLegend{max-width:430px;margin:0 auto;text-align:left;background:rgba(255,255,255,.1);border-radius:18px;padding:14px;font-size:18px}.categoryLegend div{padding:5px 0}

@@ -8,7 +8,6 @@
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -54,7 +53,7 @@
     <button id="newRoomBtn" class="secondary">🎫 Nieuw spel / kamer maken</button>
     <div id="roomInfo" class="roomBox hidden">
       <h3>Spelcode: <span id="roomCodeText"></span></h3>
-      <canvas id="qrCanvas"></canvas>
+      <img id="qrImage" alt="QR-code om mee te doen">
       <p class="small">Spelers scannen deze QR-code of openen de link.</p>
       <input id="joinLink" readonly>
     </div>
