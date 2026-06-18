@@ -234,3 +234,31 @@ body.playerMode #playerCardPanel{
 .correctAnswerBox p{
   margin:5px 0;
 }
+
+/* V8 Spotify antwoord zichtbaar bij spelers */
+.spotifyAnswerCard{
+  background:rgba(255,255,255,.18);
+  border:2px solid rgba(255,255,255,.28);
+  border-radius:22px;
+  padding:18px;
+  margin:12px 0 18px;
+  text-align:left;
+  box-shadow:0 0 25px rgba(255,255,255,.15);
+}
+.spotifyAnswerCard h3{
+  text-align:center;
+  margin:0 0 14px;
+  font-size:28px;
+}
+.spotifyAnswerGrid{
+  display:grid;
+  gap:9px;
+  font-size:20px;
+}
+.spotifyAnswerGrid div{
+  background:rgba(0,0,0,.18);
+  border-radius:14px;
+  padding:10px;
+}
+
+/* Clean final extra */

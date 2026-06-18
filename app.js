@@ -1446,3 +1446,328 @@ setTimeout(() => {
     answerNew.addEventListener("click", showAnswerV7);
   }
 }, 500);
+
+
+/* =========================
+   V8 SPOTIFY ANTWOORD ROBUUST NAAR SPELERS
+   ========================= */
+
+function buildSpotifyAnswerV8(){
+  if(!currentTrack) return null;
+  return {
+    track: currentTrack.name || "",
+    title: currentTrack.name || "",
+    artist: currentTrack.artists || "",
+    artists: currentTrack.artists || "",
+    album: currentTrack.album || "",
+    year: (currentTrack.release_date || "").slice(0,4) || "",
+    release_date: currentTrack.release_date || "",
+    shownAtClient: Date.now()
+  };
+}
+
+function showAnswerV8(){
+  if(!currentTrack) return;
+
+  const answer = buildSpotifyAnswerV8();
+
+  if($("answerArea")){
+    $("answerArea").innerHTML=`<div class="answerCard">
+      <h3>${esc(answer.track || "-")}</h3>
+      <p><strong>Artiest:</strong> ${esc(answer.artist || "-")}</p>
+      <p><strong>Album:</strong> ${esc(answer.album || "-")}</p>
+      <p><strong>Jaar:</strong> ${esc(answer.year || "-")}</p>
+      <p><strong>Volgende:</strong> druk op START RONDE voor een nieuw willekeurig nummer.</p>
+    </div>`;
+  }
+
+  const room = currentRoomCode || localStorage.getItem("hb_host_room") || "";
+  const roundId = hostAnswerRoundId || v5CurrentRoundId || v3RoundId || "";
+
+  if(db && room && roundId && answer){
+    const payload = {
+      ...answer,
+      shownAt: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    const updates = {};
+    updates["rooms/" + room + "/correctAnswer/" + roundId] = payload;
+    updates["rooms/" + room + "/currentRound/correctAnswer"] = payload;
+    updates["rooms/" + room + "/currentRound/correctAnswerShown"] = true;
+    updates["rooms/" + room + "/rounds/" + roundId + "/correctAnswer"] = payload;
+    updates["rooms/" + room + "/rounds/" + roundId + "/correctAnswerShown"] = true;
+
+    db.ref().update(updates).then(()=>{
+      if($("roundSyncStatus")) $("roundSyncStatus").textContent = "✅ Juiste antwoord verzonden naar spelers.";
+    }).catch(e=>showError("Juiste antwoord verzenden mislukt: " + e.message));
+  }
+}
+
+function renderSpotifyAnswerForPlayersV8(answer){
+  if(!$("correctAnswerBox")) return;
+
+  if(!answer || (!answer.track && !answer.title && !answer.artist && !answer.artists)){
+    $("correctAnswerBox").classList.add("hidden");
+    $("correctAnswerBox").innerHTML = "";
+    return;
+  }
+
+  const track = answer.track || answer.title || "-";
+  const artist = answer.artist || answer.artists || "-";
+  const album = answer.album || "-";
+  const year = answer.year || (answer.release_date || "").slice(0,4) || "-";
+
+  $("correctAnswerBox").classList.remove("hidden");
+  $("correctAnswerBox").innerHTML = `
+    <div class="spotifyAnswerCard">
+      <h3>✅ Juiste Spotify-antwoord</h3>
+      <div class="spotifyAnswerGrid">
+        <div>🎵 <strong>Track:</strong> ${esc(track)}</div>
+        <div>👤 <strong>Artiest:</strong> ${esc(artist)}</div>
+        <div>📅 <strong>Jaar:</strong> ${esc(year)}</div>
+        <div>💿 <strong>Album:</strong> ${esc(album)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function listenSpotifyAnswerForPlayersV8(){
+  if(!db || !currentRoomCode) return;
+
+  db.ref("rooms/" + currentRoomCode + "/currentRound").on("value", snap=>{
+    const round = snap.val() || {};
+    if(round.correctAnswerShown && round.correctAnswer){
+      if($("playerAnswersOverviewPanel")) $("playerAnswersOverviewPanel").classList.remove("hidden");
+      renderSpotifyAnswerForPlayersV8(round.correctAnswer);
+    }else{
+      renderSpotifyAnswerForPlayersV8(null);
+    }
+  });
+}
+
+// Override oude Toon antwoord definitief
+showAnswer = showAnswerV8;
+
+setTimeout(()=>{
+  const oldBtn = $("answerBtn");
+  if(oldBtn){
+    const newBtn = oldBtn.cloneNode(true);
+    oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+    newBtn.addEventListener("click", showAnswerV8);
+  }
+
+  // Start speler-listener, ook als eerdere scorebord render niet opnieuw triggert
+  try{ listenSpotifyAnswerForPlayersV8(); }catch(e){}
+}, 800);
+
+
+
+/* =========================================================
+   CLEAN FINAL PATCH - correcte hoofdflow
+   ========================================================= */
+(function(){
+  function getRoom(){ return currentRoomCode || localStorage.getItem("hb_host_room") || ""; }
+  function getSeconds(){ return Number(document.getElementById("duration")?.value || 20) || 20; }
+  function getColorList(){ return (typeof colors !== "undefined" && colors.length) ? colors : [
+    {key:"yellow",name:"GEEL",emoji:"🟨",input:"cat-yellow",hex:"#ffd21f"},
+    {key:"pink",name:"ROZE",emoji:"🩷",input:"cat-pink",hex:"#ff4f93"},
+    {key:"purple",name:"PAARS",emoji:"🟪",input:"cat-purple",hex:"#8d35ff"},
+    {key:"blue",name:"BLAUW",emoji:"🟦",input:"cat-blue",hex:"#19a8ff"},
+    {key:"green",name:"GROEN",emoji:"🟩",input:"cat-green",hex:"#62d321"}
+  ]; }
+
+  window.__cleanRoundId = "";
+  window.__cleanSelectedColor = null;
+
+  function cleanHostStatus(text){
+    if(document.getElementById("roundSyncStatus")) document.getElementById("roundSyncStatus").textContent = text;
+  }
+
+  window.cleanStartRound = function(){
+    currentTrack = chooseTrack();
+    if(!currentTrack){ alert("Upload eerst je CSV."); return; }
+
+    if($("answerArea")) $("answerArea").innerHTML = "";
+    if($("playBtn")) { $("playBtn").disabled = true; $("playBtn").textContent = "🎵 Speel verborgen nummer"; }
+    if($("answerBtn")) $("answerBtn").disabled = true;
+
+    const area = $("pickerArea");
+    const mode = Math.random() < .5 ? "discobal" : "rad";
+    area.innerHTML = mode === "discobal"
+      ? `<div class="discoWrap"><div class="pickerTitle">🎉 Discobal kiest...</div><div class="disco"></div></div>`
+      : `<div><div class="pickerTitle">🎡 Draairad draait...</div><div class="wheelWrap"><div class="pointer"></div><div class="wheel"></div></div></div>`;
+
+    setTimeout(() => {
+      if(typeof flash === "function") flash();
+
+      window.__cleanSelectedColor = pick(getColorList());
+      const c = window.__cleanSelectedColor;
+      const category = $(c.input).value.trim() || "Geen categorie ingevuld";
+
+      area.innerHTML = `<div class="reveal">
+        <div class="colorDot" style="background:${c.hex};color:${c.hex}"></div>
+        <div class="colorName">${c.emoji} ${c.name}</div>
+        <div class="category">Categorie:<br><strong>${category}</strong></div>
+      </div>`;
+
+      if($("playBtn")) $("playBtn").disabled = false;
+      if($("answerBtn")) $("answerBtn").disabled = false;
+
+      const room = getRoom();
+      if(db && room){
+        window.__cleanRoundId = "r_" + Date.now();
+        hostAnswerRoundId = window.__cleanRoundId;
+        if(typeof v5CurrentRoundId !== "undefined") v5CurrentRoundId = window.__cleanRoundId;
+        if(typeof v3RoundId !== "undefined") v3RoundId = window.__cleanRoundId;
+
+        const round = {
+          id: window.__cleanRoundId,
+          status: "ready",
+          createdAt: firebase.database.ServerValue.TIMESTAMP,
+          seconds: getSeconds(),
+          isBonus: false,
+          colorKey: c.key,
+          colorName: c.name,
+          colorEmoji: c.emoji,
+          category: category
+        };
+
+        db.ref("rooms/" + room + "/currentRound").set(round)
+          .then(() => db.ref("rooms/" + room + "/rounds/" + window.__cleanRoundId).set(round))
+          .then(() => {
+            cleanHostStatus("✅ Ronde klaargezet. Spelers wachten op muziek. Timer loopt nog niet.");
+            if($("hostAnswersBox")) $("hostAnswersBox").classList.remove("hidden");
+            if(typeof listenAnswersForHost === "function") listenAnswersForHost(room, window.__cleanRoundId);
+          })
+          .catch(e => showError("Ronde klaarzetten mislukt: " + e.message));
+      }
+    }, 2500);
+  };
+
+  window.cleanPlayHidden = async function(){
+    if(!currentTrack) return;
+
+    if($("playBtn")) { $("playBtn").disabled = true; $("playBtn").textContent = "🎵 Nummer speelt..."; }
+
+    if(!deviceId){
+      await activatePlayer();
+      await new Promise(r => setTimeout(r, 1200));
+    }
+
+    if(!deviceId){
+      alert("Geen Spotify-speler actief. Tik eerst op Activeer Spotify-speler.");
+      if($("playBtn")) { $("playBtn").disabled = false; $("playBtn").textContent = "🎵 Speel verborgen nummer"; }
+      return;
+    }
+
+    const durationMs = getSeconds() * 1000;
+    let position = 0;
+
+    if($("randomStart") && $("randomStart").checked && currentTrack.duration_ms > durationMs + 40000){
+      const max = Math.max(0, currentTrack.duration_ms - durationMs - 5000);
+      position = Math.floor(20000 + Math.random() * Math.max(1, max - 20000));
+    }
+
+    try{
+      await api(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,{
+        method:"PUT",
+        body:JSON.stringify({uris:[currentTrack.uri], position_ms:position})
+      });
+
+      const room = getRoom();
+      const rid = window.__cleanRoundId || hostAnswerRoundId || (typeof v5CurrentRoundId !== "undefined" ? v5CurrentRoundId : "");
+
+      if(db && room && rid){
+        const deadline = Date.now() + durationMs;
+        const update = {
+          status:"answering",
+          startedAt: firebase.database.ServerValue.TIMESTAMP,
+          deadlineMs: deadline,
+          seconds: getSeconds()
+        };
+
+        await db.ref("rooms/" + room + "/currentRound").update(update);
+        await db.ref("rooms/" + room + "/rounds/" + rid).update(update);
+
+        cleanHostStatus("⏱️ Muziek gestart. Timer loopt nu bij spelers.");
+
+        setTimeout(() => {
+          if(typeof lockRound === "function") lockRound(rid);
+          cleanHostStatus("🔒 Tijd voorbij. Antwoorden vergrendeld.");
+        }, durationMs);
+      }
+
+      if($("stopBtn")) $("stopBtn").disabled = false;
+      clearTimeout(stopTimer);
+      stopTimer = setTimeout(stopPlayback, durationMs);
+    }catch(e){
+      alert("Afspelen mislukt: " + e.message);
+      if($("playBtn")) { $("playBtn").disabled = false; $("playBtn").textContent = "🎵 Speel verborgen nummer"; }
+    }
+  };
+
+  window.cleanShowAnswer = function(){
+    if(!currentTrack) return;
+
+    const answer = {
+      track: currentTrack.name || "",
+      title: currentTrack.name || "",
+      artist: currentTrack.artists || "",
+      artists: currentTrack.artists || "",
+      album: currentTrack.album || "",
+      year: (currentTrack.release_date || "").slice(0,4) || "",
+      release_date: currentTrack.release_date || ""
+    };
+
+    if($("answerArea")){
+      $("answerArea").innerHTML = `<div class="answerCard">
+        <h3>${esc(answer.track || "-")}</h3>
+        <p><strong>Artiest:</strong> ${esc(answer.artist || "-")}</p>
+        <p><strong>Album:</strong> ${esc(answer.album || "-")}</p>
+        <p><strong>Jaar:</strong> ${esc(answer.year || "-")}</p>
+      </div>`;
+    }
+
+    const room = getRoom();
+    const rid = window.__cleanRoundId || hostAnswerRoundId || (typeof v5CurrentRoundId !== "undefined" ? v5CurrentRoundId : "");
+
+    if(db && room && rid){
+      const payload = {...answer, shownAt: firebase.database.ServerValue.TIMESTAMP};
+      const updates = {};
+      updates["rooms/" + room + "/currentRound/correctAnswer"] = payload;
+      updates["rooms/" + room + "/currentRound/correctAnswerShown"] = true;
+      updates["rooms/" + room + "/correctAnswer/" + rid] = payload;
+      updates["rooms/" + room + "/rounds/" + rid + "/correctAnswer"] = payload;
+      updates["rooms/" + room + "/rounds/" + rid + "/correctAnswerShown"] = true;
+      db.ref().update(updates).then(() => cleanHostStatus("✅ Juiste Spotify-antwoord verzonden naar spelers."));
+    }
+  };
+
+  window.cleanPublishResults = function(){
+    const room = getRoom();
+    const rid = hostAnswerRoundId || window.__cleanRoundId || (typeof v5CurrentRoundId !== "undefined" ? v5CurrentRoundId : "");
+    if(!db || !room || !rid){ alert("Geen ronde gevonden om te publiceren."); return; }
+    db.ref("rooms/" + room + "/currentRound/status").set("judged")
+      .then(() => db.ref("rooms/" + room + "/rounds/" + rid + "/status").set("judged"))
+      .then(() => cleanHostStatus("✅ Resultaten verzonden. Goede spelers mogen 1 vakje kiezen."));
+  };
+
+  // Force correct button wiring
+  setTimeout(() => {
+    const mappings = [
+      ["startBtn", cleanStartRound],
+      ["playBtn", cleanPlayHidden],
+      ["answerBtn", cleanShowAnswer],
+      ["publishResultsBtn", cleanPublishResults]
+    ];
+
+    mappings.forEach(([id, fn]) => {
+      const old = $(id);
+      if(old){
+        const neu = old.cloneNode(true);
+        old.parentNode.replaceChild(neu, old);
+        neu.addEventListener("click", fn);
+      }
+    });
+  }, 1200);
+})();
