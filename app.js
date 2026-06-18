@@ -1771,3 +1771,94 @@ setTimeout(()=>{
     });
   }, 1200);
 })();
+
+
+/* =========================
+   RESET MELDINGEN FIX
+   ========================= */
+
+function clearElement(id, text=""){
+  const el = document.getElementById(id);
+  if(el) el.innerHTML = text;
+}
+
+function hideElement(id){
+  const el = document.getElementById(id);
+  if(el) el.classList.add("hidden");
+}
+
+function resetRoundMessages(){
+  hideElement("winnerPanel");
+  hideElement("hostBingoBox");
+  hideElement("correctAnswerBox");
+  hideElement("playerAnswersOverviewPanel");
+
+  clearElement("winnerMessage", "🏆");
+  clearElement("hostBingoMessage", "Nog geen bingo.");
+  clearElement("answerArea", "");
+  clearElement("correctAnswerBox", "");
+  clearElement("playerAnswersOverview", "Nog geen antwoorden zichtbaar.");
+  clearElement("hostAnswersList", "Nog geen antwoorden.");
+  clearElement("hostRoundInfo", "");
+  clearElement("answerStatus", "");
+  clearElement("roundSyncStatus", "Nieuwe ronde gestart.");
+
+  const answerInput = document.getElementById("playerAnswerInput");
+  if(answerInput){
+    answerInput.value = "";
+    answerInput.disabled = true;
+  }
+
+  const submitBtn = document.getElementById("submitAnswerBtn");
+  if(submitBtn) submitBtn.disabled = true;
+
+  const timerBox = document.getElementById("timerBox");
+  if(timerBox) timerBox.textContent = "⏱️ --";
+
+  const playerRoundInfo = document.getElementById("playerRoundInfo");
+  if(playerRoundInfo) playerRoundInfo.textContent = "Wachten op ronde...";
+}
+
+function resetNewGameMessages(){
+  resetRoundMessages();
+  localStorage.removeItem("hb_last_bingo_key");
+  lastBingoKey = "";
+
+  clearElement("playersList", "Nog geen spelers.");
+  clearElement("roundSyncStatus", "Nieuw spel gestart.");
+}
+
+// Override startRound so each new round clears old UI first
+if(typeof startRound === "function"){
+  const originalStartRoundResetFix = startRound;
+  startRound = function(){
+    resetRoundMessages();
+    return originalStartRoundResetFix.apply(this, arguments);
+  };
+}
+
+// Override createRoom so each new game clears old UI first
+if(typeof createRoom === "function"){
+  const originalCreateRoomResetFix = createRoom;
+  createRoom = function(){
+    resetNewGameMessages();
+    return originalCreateRoomResetFix.apply(this, arguments);
+  };
+}
+
+// Rebind buttons to the overridden functions
+setTimeout(() => {
+  const startOld = document.getElementById("startBtn");
+  if(startOld){
+    const startNew = startOld.cloneNode(true);
+    startOld.parentNode.replaceChild(startNew, startOld);
+    startNew.addEventListener("click", startRound);
+  }
+
+  const roomOld = document.getElementById("newRoomBtn");
+  if(roomOld){
+    const roomNew = roomOld.cloneNode(true);
+    roomOld.parentNode.replaceChild(roomNew, roomOld);
+    roomNew.addEventListener("click", createRoom);
+  }
+}, 300);
