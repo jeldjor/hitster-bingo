@@ -1,1 +1,0 @@
-Schone versie. Verwijder je oude GitHub-bestanden en upload alleen index.html, style.css en app.js uit deze zip.
