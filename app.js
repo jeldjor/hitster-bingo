@@ -1,0 +1,1059 @@
+const CLIENT_ID="4765b89201b44558a7d5141f9b93c178";
+const REDIRECT_URI=location.origin+location.pathname;
+const SCOPES=["streaming","user-read-email","user-read-private","user-read-playback-state","user-modify-playback-state"].join(" ");
+const firebaseConfig={apiKey:"AIzaSyCcquz1mpz3FsmFFBKgJLgpbkHCajTUpzY",authDomain:"hitster-bingo-cb792.firebaseapp.com",databaseURL:"https://hitster-bingo-cb792-default-rtdb.europe-west1.firebasedatabase.app",projectId:"hitster-bingo-cb792",storageBucket:"hitster-bingo-cb792.firebasestorage.app",messagingSenderId:"98696776977",appId:"1:98696776977:web:e797e555e2d9b38bcc99b0"};
+const COLORS=[{key:"yellow",name:"GEEL",emoji:"🟨",input:"cat-yellow",hex:"#ffd21f"},{key:"pink",name:"ROZE",emoji:"🩷",input:"cat-pink",hex:"#ff4f93"},{key:"purple",name:"PAARS",emoji:"🟪",input:"cat-purple",hex:"#8d35ff"},{key:"blue",name:"BLAUW",emoji:"🟦",input:"cat-blue",hex:"#19a8ff"},{key:"green",name:"GROEN",emoji:"🟩",input:"cat-green",hex:"#62d321"}];
+let db, player, deviceId="", accessToken=localStorage.spotify_access_token||"", refreshToken=localStorage.spotify_refresh_token||"", expiresAt=Number(localStorage.spotify_expires_at||0);
+let tracks=JSON.parse(localStorage.hb_csv_tracks||"[]"), currentTrack=null, currentRoomCode="", currentRoundId="", currentPlayerId=localStorage.hb_player_id||"", currentPlayerName=localStorage.hb_player_name||"", activeRound=null;
+let stopTimer=null, lockTimer=null, screenTimer=null, audioCtx=null, lastBingoKey=localStorage.hb_last_bingo_key||"";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const emoji=k=>({yellow:"🟨",pink:"🩷",purple:"🟪",blue:"🟦",green:"🟩",free:"⭐"}[k]||"⬜");
+
+function init(){if(!firebase.apps.length)firebase.initializeApp(firebaseConfig);db=firebase.database();wire();handleRedirect().then(updateStatus);setupPlayerMode();restoreHost();}
+function wire(){
+ $("loginBtn")?.addEventListener("click",login);$("logoutBtn")?.addEventListener("click",logout);$("activateBtn")?.addEventListener("click",activatePlayer);$("csvFile")?.addEventListener("change",handleCsv);$("resetUsedBtn")?.addEventListener("click",()=>{delete localStorage.hb_used;updateStatus()});
+ $("newRoomBtn")?.addEventListener("click",createRoom);$("soundBtn")?.addEventListener("click",activateSound);$("startRoundBtn")?.addEventListener("click",startRound);$("playBtn")?.addEventListener("click",playHidden);$("stopBtn")?.addEventListener("click",stopPlayback);$("showAnswerBtn")?.addEventListener("click",showAnswer);$("lockBtn")?.addEventListener("click",lockRound);$("publishBtn")?.addEventListener("click",publishResults);
+ $("joinBtn")?.addEventListener("click",joinPlayer);$("readyBtn")?.addEventListener("click",setReady);$("scoreReadyBtn")?.addEventListener("click",setReady);$("submitAnswerBtn")?.addEventListener("click",submitAnswer);
+ $("hostScoreboard")?.addEventListener("click",scoreboardClick);
+}
+
+// CSV
+function parseCSV(t){let rows=[],r=[],c="",q=false;for(let i=0;i<t.length;i++){let ch=t[i],n=t[i+1];if(ch=='"'&&q&&n=='"'){c+='"';i++}else if(ch=='"')q=!q;else if(ch==","&&!q){r.push(c);c=""}else if((ch=="\n"||ch=="\r")&&!q){if(ch=="\r"&&n=="\n")i++;r.push(c);c="";if(r.some(v=>v.trim()))rows.push(r);r=[]}else c+=ch}r.push(c);if(r.some(v=>v.trim()))rows.push(r);return rows}
+function norm(h){return h.toLowerCase().replace(/[^a-z0-9]/g,"")}function findI(h,n){let ns=h.map(norm);for(let x of n){let i=ns.indexOf(norm(x));if(i>=0)return i}return -1}
+function tid(u){let m=String(u||"").match(/spotify:track:([a-zA-Z0-9]+)/)||String(u||"").match(/track\/([a-zA-Z0-9]+)/);return m?m[1]:(/^[a-zA-Z0-9]{15,}$/.test(String(u).trim())?String(u).trim():"")}
+function handleCsv(e){let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{loadCsv(r.result)}catch(err){alert(err.message)}};r.readAsText(f)}
+function loadCsv(text){let rows=parseCSV(text),h=rows[0]||[],ui=findI(h,["Track URI","Spotify URI","URI"]),ti=findI(h,["Track Name","Name","Title"]),ai=findI(h,["Artist Name(s)","Artist Names","Artists","Artist"]),al=findI(h,["Album Name","Album"]),ri=findI(h,["Release Date","Release"]),di=findI(h,["Duration (ms)","Duration"]);if(ui<0||ti<0||ai<0)throw Error("CSV mist Track URI, Track Name of Artist Name(s).");let out=[],seen=new Set();for(let i=1;i<rows.length;i++){let row=rows[i],id=tid(row[ui]);if(!id||seen.has(id))continue;seen.add(id);out.push({id,uri:"spotify:track:"+id,name:row[ti]||"Onbekend",artists:row[ai]||"Onbekend",album:al>=0?row[al]||"":"",release_date:ri>=0?row[ri]||"":"",duration_ms:Number(row[di])||180000})}tracks=out;localStorage.hb_csv_tracks=JSON.stringify(tracks);updateStatus()}
+function chooseTrack(){if(!tracks.length)return null;let u=new Set(JSON.parse(localStorage.hb_used||"[]")),a=$("noRepeat").checked?tracks.filter(t=>!u.has(t.id)):tracks;if(!a.length){u.clear();a=tracks}let t=pick(a);u.add(t.id);localStorage.hb_used=JSON.stringify([...u]);updateStatus();return t}
+
+// Spotify
+function rand(l){let ch="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~",o="";crypto.getRandomValues(new Uint8Array(l)).forEach(x=>o+=ch[x%ch.length]);return o}
+async function sha(s){return crypto.subtle.digest("SHA-256",new TextEncoder().encode(s))}function b64(b){return btoa(String.fromCharCode(...new Uint8Array(b))).replace(/=/g,"").replace(/\+/g,"-").replace(/\//g,"_")}
+async function login(){let v=rand(96);localStorage.spotify_code_verifier=v;location="https://accounts.spotify.com/authorize?"+new URLSearchParams({response_type:"code",client_id:CLIENT_ID,scope:SCOPES,code_challenge_method:"S256",code_challenge:b64(await sha(v)),redirect_uri:REDIRECT_URI})}
+async function handleRedirect(){let code=new URLSearchParams(location.search).get("code");if(!code)return;let v=localStorage.spotify_code_verifier;let res=await fetch("https://accounts.spotify.com/api/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:CLIENT_ID,grant_type:"authorization_code",code,redirect_uri:REDIRECT_URI,code_verifier:v})});let d=await res.json();if(d.access_token){saveTokens(d);history.replaceState({},document.title,REDIRECT_URI)}else alert("Spotify login fout")}
+function saveTokens(d){accessToken=d.access_token;if(d.refresh_token)refreshToken=d.refresh_token;expiresAt=Date.now()+d.expires_in*1000-60000;localStorage.spotify_access_token=accessToken;if(refreshToken)localStorage.spotify_refresh_token=refreshToken;localStorage.spotify_expires_at=expiresAt}
+async function getToken(){if(accessToken&&Date.now()<expiresAt)return accessToken;if(!refreshToken)return"";let res=await fetch("https://accounts.spotify.com/api/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({grant_type:"refresh_token",refresh_token:refreshToken,client_id:CLIENT_ID})});let d=await res.json();if(d.access_token){saveTokens(d);return accessToken}return""}
+async function api(url,opt={}){let t=await getToken();if(!t)throw Error("Niet ingelogd.");let r=await fetch(url,{...opt,headers:{...(opt.headers||{}),Authorization:"Bearer "+t,"Content-Type":"application/json"}});if(r.status===204)return{};let d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error?.message||"Spotify fout");return d}
+function logout(){["spotify_access_token","spotify_refresh_token","spotify_expires_at"].forEach(k=>localStorage.removeItem(k));accessToken=refreshToken="";expiresAt=0;updateStatus()}
+async function updateStatus(){if($("csvStatus"))$("csvStatus").textContent=tracks.length?`${tracks.length} nummers geladen.`:"Nog geen CSV geladen.";if(!$("loginStatus"))return;if(await getToken()){try{let me=await api("https://api.spotify.com/v1/me");$("loginStatus").textContent="Ingelogd als: "+(me.display_name||me.email||"Spotify gebruiker");$("activateBtn").disabled=false}catch(e){$("loginStatus").textContent="Ingelogd."}}else{$("loginStatus").textContent="Nog niet ingelogd."; $("activateBtn").disabled=true}}
+window.onSpotifyWebPlaybackSDKReady=()=>{};
+async function activatePlayer(){let t=await getToken();if(!t){alert("Login eerst.");return}if(!window.Spotify){alert("Spotify speler nog niet geladen.");return}if(player){await player.connect();return}player=new Spotify.Player({name:"Hitster Bingo",getOAuthToken:async cb=>cb(await getToken()),volume:.8});player.addListener("ready",({device_id})=>{deviceId=device_id;$("loginStatus").textContent+=" — speler actief."});await player.connect()}
+
+// Room/player
+function getCats(){return{yellow:$("cat-yellow").value,pink:$("cat-pink").value,purple:$("cat-purple").value,blue:$("cat-blue").value,green:$("cat-green").value}}
+function roomCode(){let c="",ch="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";for(let i=0;i<4;i++)c+=ch[Math.floor(Math.random()*ch.length)];return c}
+function genCard(){let p=[],cs=["yellow","pink","purple","blue","green"];for(let i=0;i<24;i++)p.push(cs[i%5]);for(let i=p.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[p[i],p[j]]=[p[j],p[i]]}let card=[],k=0;for(let i=0;i<25;i++)card.push(i===12?"free":p[k++]);return card}
+function createRoom(){currentRoomCode=roomCode();db.ref("rooms/"+currentRoomCode).set({createdAt:firebase.database.ServerValue.TIMESTAMP,categories:getCats()}).then(()=>{localStorage.hb_host_room=currentRoomCode;showRoom();listenHost(currentRoomCode);listenBingo(currentRoomCode)})}
+function showRoom(){$("roomBox").classList.remove("hidden");$("roomCodeText").textContent=currentRoomCode;$("joinLink").value=location.origin+location.pathname+"?room="+currentRoomCode}
+function restoreHost(){let room=localStorage.hb_host_room;if(room&&!new URLSearchParams(location.search).get("room")){currentRoomCode=room;showRoom();listenHost(room);listenBingo(room)}}
+function setupPlayerMode(){let room=new URLSearchParams(location.search).get("room");if(!room)return;document.body.classList.add("playerMode");$("modeText").textContent="Speler";$("playerApp").classList.remove("hidden");currentRoomCode=room.toUpperCase();$("playerRoomCode").textContent=currentRoomCode;if(currentPlayerName)$("playerNameInput").value=currentPlayerName}
+function joinPlayer(){let name=$("playerNameInput").value.trim();if(!name){alert("Vul je naam in.");return}currentPlayerName=name;if(!currentPlayerId)currentPlayerId="p_"+Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);localStorage.hb_player_id=currentPlayerId;localStorage.hb_player_name=name;localStorage.hb_player_room=currentRoomCode;let ref=db.ref("rooms/"+currentRoomCode+"/players/"+currentPlayerId);ref.once("value").then(s=>{let ex=s.val()||{};return ref.update({name,online:true,ready:false,joinedAt:ex.joinedAt||firebase.database.ServerValue.TIMESTAMP,lastSeen:firebase.database.ServerValue.TIMESTAMP,card:ex.card||genCard(),marked:ex.marked||{}})}).then(()=>{ref.child("online").onDisconnect().set(false);listenPlayer();showScreen("screenLobby")})}
+function setReady(){if(!currentPlayerId)return;db.ref("rooms/"+currentRoomCode+"/players/"+currentPlayerId+"/ready").set(true)}
+function showScreen(id){document.querySelectorAll("#playerApp .screen").forEach(s=>s.classList.add("hidden"));$(id)?.classList.remove("hidden")}
+
+// Host listen
+function listenHost(room){db.ref("rooms/"+room).on("value",s=>{let data=s.val()||{};renderHostPlayers(data);renderHostScore(data);hostReadyState(data)})}
+function renderHostPlayers(room){let ps=room.players||{};$("hostPlayers").innerHTML=Object.values(ps).length?Object.values(ps).map(p=>`<div class="playerRow ${p.ready?"ready":""}"><strong>${esc(p.name)}</strong><span>${p.ready?"✅ READY":"⏳ wacht"}</span></div>`).join(""):"Nog geen spelers."}
+function allReady(room){let ps=Object.values(room.players||{});return ps.length>0&&ps.every(p=>p.ready)}
+function hostReadyState(room){let r=room.currentRound||{},btn=$("startRoundBtn");if(["picking","ready","answering","locked"].includes(r.status))return;if(allReady(room)){btn.disabled=false;btn.textContent="🎲 START RONDE";$("hostStatus").textContent="Iedereen is READY."}else{btn.disabled=true;btn.textContent="⏳ Wachten op READY";let not=Object.values(room.players||{}).filter(p=>!p.ready).map(p=>p.name).join(", ");$("hostStatus").textContent=not?"Nog niet ready: "+not:"Wachten op spelers."}}
+
+// Round host
+function flash(){let f=document.createElement("div");f.className="flash";document.body.appendChild(f);setTimeout(()=>f.remove(),700)}
+function pickerHTML(mode){return mode==="wheel"?`<div class="wheelWrap"><div class="pointer"></div><div class="wheel"></div></div><div class="pickerTitle">Draairad draait...</div>`:`<div class="discoIcon">🪩</div><div class="pickerTitle">Discobal kiest...</div>`}
+function startRound(){let room=currentRoomCode;if(!room){alert("Maak eerst kamer.");return}db.ref("rooms/"+room).once("value").then(s=>{let data=s.val()||{};if(!allReady(data)){alert("Nog niet iedereen is READY.");return}currentTrack=chooseTrack();if(!currentTrack){alert("Upload eerst CSV.");return}let up={};Object.keys(data.players||{}).forEach(pid=>up["rooms/"+room+"/players/"+pid+"/ready"]=false);db.ref().update(up).then(()=>startRoundVisual(room))})}
+function startRoundVisual(room){
+  $("hostAnswerArea").innerHTML="";
+  $("playBtn").disabled=true;
+  $("showAnswerBtn").disabled=true;
+  const mode=Math.random()<.5?"disco":"wheel";
+  $("hostPickerArea").innerHTML=pickerHTML(mode);
+  currentRoundId="r_"+Date.now();
+
+  db.ref("rooms/"+room+"/currentRound").set({
+    id:currentRoundId,
+    status:"picking",
+    pickerMode:mode,
+    seconds:Number($("duration").value)||20,
+    createdAt:firebase.database.ServerValue.TIMESTAMP
+  });
+
+  setTimeout(()=>{
+    flash();
+    let color=pick(COLORS),cat=$(color.input).value||"Geen categorie";
+    $("hostPickerArea").innerHTML=`<div class="colorDisplay">${color.emoji}<br>${color.name}</div><div class="categoryDisplay">${esc(cat)}</div>`;
+    let round={id:currentRoundId,status:"ready",pickerMode:mode,colorKey:color.key,colorName:color.name,colorEmoji:color.emoji,category:cat,seconds:Number($("duration").value)||20};
+    db.ref("rooms/"+room+"/currentRound").set(round);
+    $("playBtn").disabled=false;
+    $("showAnswerBtn").disabled=false;
+    $("hostScorePanel").classList.remove("hidden");
+  },2600);
+}
+async function playHidden(){if(!currentTrack)return;$("playBtn").disabled=true;if(!deviceId){await activatePlayer();await new Promise(r=>setTimeout(r,1200))}if(!deviceId){alert("Geen Spotify-speler actief.");$("playBtn").disabled=false;return}let dur=(Number($("duration").value)||20)*1000,pos=0;if($("randomStart").checked&&currentTrack.duration_ms>dur+40000){let max=Math.max(0,currentTrack.duration_ms-dur-5000);pos=Math.floor(20000+Math.random()*Math.max(1,max-20000))}await api(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,{method:"PUT",body:JSON.stringify({uris:[currentTrack.uri],position_ms:pos})});let deadline=Date.now()+dur;await db.ref("rooms/"+currentRoomCode+"/currentRound").update({status:"answering",deadlineMs:deadline});$("stopBtn").disabled=false;clearTimeout(lockTimer);lockTimer=setTimeout(lockRound,dur);clearTimeout(stopTimer);stopTimer=setTimeout(stopPlayback,dur)}
+async function stopPlayback(){try{await api("https://api.spotify.com/v1/me/player/pause",{method:"PUT",body:"{}"})}catch(e){}$("stopBtn").disabled=true}
+function lockRound(){db.ref("rooms/"+currentRoomCode+"/currentRound/status").set("locked")}
+function showAnswer(){if(!currentTrack)return;let ans={track:currentTrack.name,artist:currentTrack.artists,album:currentTrack.album,year:(currentTrack.release_date||"").slice(0,4)};$("hostAnswerArea").innerHTML=`<div class="correctBox"><h3>${esc(ans.track)}</h3><p>${esc(ans.artist)}</p><p>${esc(ans.album||"-")} — ${esc(ans.year||"-")}</p></div>`;db.ref("rooms/"+currentRoomCode+"/currentRound").update({correctAnswer:ans})}
+function renderHostScore(room){let r=room.currentRound||{};if(!r.id)return;$("hostScorePanel").classList.remove("hidden");$("hostRoundInfo").textContent=`${r.colorEmoji||""} ${r.colorName||""} — ${r.category||""} — ${r.status||""}`;let ps=room.players||{},ans=room.answers?.[r.id]||{},cor=room.correct?.[r.id]||{};$("hostScoreboard").innerHTML=Object.entries(ps).map(([pid,p])=>{let st=cor[pid],cls=st===true?"scoreGood":st===false?"scoreBad":"scorePending";return `<div class="scoreCard ${cls}"><div>${esc(p.name)}</div><div>${esc(ans[pid]?.answer||"Geen antwoord")}</div><div><button type="button" class="goodBtn ${st===true?"goodSelected":""}" data-pid="${pid}" data-good="true">✅</button><button type="button" class="badBtn ${st===false?"badSelected":""}" data-pid="${pid}" data-good="false">❌</button></div></div>`}).join("")}
+function scoreboardClick(e){let btn=e.target.closest("button[data-pid]");if(!btn)return;e.preventDefault();let pid=btn.dataset.pid,good=btn.dataset.good==="true";db.ref("rooms/"+currentRoomCode+"/currentRound").once("value").then(s=>{let r=s.val()||{};if(!r.id)throw Error("Geen actieve ronde.");return db.ref("rooms/"+currentRoomCode+"/correct/"+r.id+"/"+pid).set(good)}).then(()=>{$("hostStatus").textContent="✅ Beoordeling opgeslagen."}).catch(err=>alert(err.message))}
+function publishResults(){db.ref("rooms/"+currentRoomCode).once("value").then(s=>{let room=s.val()||{},up={};up["rooms/"+currentRoomCode+"/currentRound/status"]="judged";Object.keys(room.players||{}).forEach(pid=>up["rooms/"+currentRoomCode+"/players/"+pid+"/ready"]=false);return db.ref().update(up)}).then(()=>{$("hostStatus").textContent="Resultaten verzonden. Goede spelers mogen kiezen."})}
+
+// Player listen/render
+function listenPlayer(){db.ref("rooms/"+currentRoomCode).on("value",s=>{let room=s.val()||{},r=room.currentRound||{};activeRound=r;renderLobby(room);if(!r.id){showScreen("screenLobby");return}if(r.status==="picking"){renderPlayerPicker(r);showScreen("screenPicker");return}if(r.status==="ready"){renderColor(r);showScreen("screenColor");return}if(r.status==="answering"){renderAnswer(room,r);showScreen("screenAnswer");return}if(r.status==="locked"){renderScore(room);showScreen("screenScore");return}if(r.status==="judged"){renderScore(room);let me=room.players?.[currentPlayerId]||{},good=room.correct?.[r.id]?.[currentPlayerId]===true,picked=me.lastPickedRound===r.id;if(good&&!picked){renderPick(room,r);showScreen("screenPick")}else showScreen("screenScore")}});listenBingo(currentRoomCode)}
+function renderLobby(room){let ps=room.players||{},me=ps[currentPlayerId]||{};$("playerList").innerHTML=Object.entries(ps).map(([pid,p])=>`<div class="playerRow ${p.ready?"ready":""}" onclick="showOther('${pid}')"><strong>${esc(p.name)}${pid===currentPlayerId?" (jij)":""}</strong><span>${p.ready?"✅ READY":"⏳ wacht"}</span></div>`).join("");let total=Object.keys(ps).length,ready=Object.values(ps).filter(p=>p.ready).length;$("lobbyInfo").textContent=`${ready}/${total} spelers ready`;renderCard("ownCard",me.card||[],me.marked||{});$("readyBtn").disabled=!!me.ready}
+function showOther(pid){db.ref("rooms/"+currentRoomCode+"/players/"+pid).once("value").then(s=>{let p=s.val();if(!p)return;$("otherCardBox").classList.remove("hidden");$("otherCardTitle").textContent="Kaart van "+p.name;renderCard("otherCard",p.card||[],p.marked||{})})}
+window.showOther=showOther;
+function renderCard(id,card,marked,click=false,r=null){let el=$(id);if(!el)return;el.innerHTML=(card||[]).map((c,i)=>{let m=marked&&marked[i],pickable=click&&r&&c===r.colorKey&&c!=="free"&&!m,blocked=click&&!pickable&&c!=="free"&&!m;return `<div class="bingoCell ${c==="free"?"free":""} ${pickable?"pickableCell":""} ${blocked?"blockedCell":""}" data-i="${i}">${m?"✅":emoji(c)}</div>`}).join("");if(click)el.querySelectorAll(".pickableCell").forEach(x=>x.addEventListener("click",()=>pickCell(Number(x.dataset.i))))}
+function renderPlayerPicker(r){$("playerPickerArea").innerHTML=pickerHTML(r.pickerMode||"disco")}
+function renderColor(r){$("colorDisplay").innerHTML=`${r.colorEmoji}<br>${r.colorName}`;$("categoryDisplay").textContent=r.category}
+function renderAnswer(room,r){$("answerRoundInfo").textContent=`${r.colorEmoji} ${r.colorName} — ${r.category}`;let ex=room.answers?.[r.id]?.[currentPlayerId];if(ex){$("answerInput").value=ex.answer;$("answerInput").disabled=true;$("submitAnswerBtn").disabled=true;$("answerStatus").textContent="🔒 Antwoord ingeleverd."}else{$("answerInput").disabled=false;$("submitAnswerBtn").disabled=false;$("answerStatus").textContent="Typ je antwoord."}clearInterval(screenTimer);screenTimer=setInterval(()=>{let left=Math.max(0,Math.ceil(((r.deadlineMs||0)-Date.now())/1000));$("timerBox").textContent="⏱️ "+left+" sec";if(left<=0){clearInterval(screenTimer);$("answerInput").disabled=true;$("submitAnswerBtn").disabled=true}},300)}
+function submitAnswer(){if(!activeRound?.id)return;db.ref("rooms/"+currentRoomCode+"/answers/"+activeRound.id+"/"+currentPlayerId).set({answer:$("answerInput").value||"",submittedAt:firebase.database.ServerValue.TIMESTAMP}).then(()=>showScreen("screenScore"))}
+function renderScore(room){let r=room.currentRound||{},box=$("correctAnswerBox"),ans=r.correctAnswer;if(ans){box.classList.remove("hidden");box.innerHTML=`<h3>✅ Juiste antwoord</h3><p>🎵 ${esc(ans.track||"-")}</p><p>👤 ${esc(ans.artist||"-")}</p><p>📅 ${esc(ans.year||"-")}</p><p>💿 ${esc(ans.album||"-")}</p>`}else box.classList.add("hidden");let ps=room.players||{},answers=room.answers?.[r.id]||{},cor=room.correct?.[r.id]||{};$("playerScoreboard").innerHTML=Object.entries(ps).map(([pid,p])=>{let st=r.status==="judged"?cor[pid]:undefined,cls=st===true?"scoreGood":st===false?"scoreBad":"scorePending",icon=st===true?"✅":st===false?"❌":"⏳";return `<div class="scoreCard ${cls}"><div class="scoreName" onclick="showOther('${pid}')">${esc(p.name)}${pid===currentPlayerId?" (jij)":""}</div><div>${esc(answers[pid]?.answer||"Geen antwoord")}</div><div>${icon}</div></div>`}).join("")}
+function renderPick(room,r){let me=room.players?.[currentPlayerId]||{};$("pickInfo").textContent=`Kies 1 ${r.colorEmoji} ${r.colorName} vakje.`;renderCard("pickCard",me.card||[],me.marked||{},true,r)}
+function checkBingo(marked){let lines=[[0,1,2,3,4],[5,6,7,8,9],[10,11,12,13,14],[15,16,17,18,19],[20,21,22,23,24],[0,5,10,15,20],[1,6,11,16,21],[2,7,12,17,22],[3,8,13,18,23],[4,9,14,19,24],[0,6,12,18,24],[4,8,12,16,20]];return lines.some(line=>line.every(i=>i===12||(marked&&marked[i])))}
+function pickCell(i){db.ref("rooms/"+currentRoomCode+"/players/"+currentPlayerId).once("value").then(s=>{let p=s.val()||{},marked=p.marked||{},card=p.card||[];if(card[i]!==activeRound.colorKey||marked[i])return;marked[i]=true;let bingo=checkBingo(marked);db.ref("rooms/"+currentRoomCode+"/players/"+currentPlayerId).update({marked,bingo,lastPickedRound:activeRound.id,ready:true}).then(()=>{if(bingo)db.ref("rooms/"+currentRoomCode+"/bingos").push({name:currentPlayerName,roundId:activeRound.id,at:firebase.database.ServerValue.TIMESTAMP});showScreen("screenLobby")})})}
+
+// Audio/winner
+function activateSound(){try{let C=window.AudioContext||window.webkitAudioContext;if(C&&!audioCtx)audioCtx=new C();if(audioCtx&&audioCtx.state==="suspended")audioCtx.resume();$("soundStatus").textContent="✅ Host-geluid actief."}catch(e){}}
+function tune(){try{let C=window.AudioContext||window.webkitAudioContext;if(!audioCtx&&C)audioCtx=new C();if(!audioCtx)return;[523,659,784,1046].forEach((f,i)=>{let o=audioCtx.createOscillator(),g=audioCtx.createGain();o.frequency.value=f;o.connect(g);g.connect(audioCtx.destination);let t=audioCtx.currentTime+i*.18;g.gain.setValueAtTime(.001,t);g.gain.exponentialRampToValueAtTime(.3,t+.03);g.gain.exponentialRampToValueAtTime(.001,t+.16);o.start(t);o.stop(t+.18)})}catch(e){}}
+function speak(name){try{speechSynthesis.cancel();let u=new SpeechSynthesisUtterance("Aiiii mi hende. Speler "+name+" heeft bingo!");u.lang="nl-NL";u.rate=.9;speechSynthesis.speak(u)}catch(e){}}
+function confetti(){let cs=["#ffd21f","#ff4f93","#8d35ff","#19a8ff","#62d321","#fff"];for(let i=0;i<90;i++){let p=document.createElement("div");p.className="confetti";p.style.left=Math.random()*100+"vw";p.style.background=pick(cs);document.body.appendChild(p);setTimeout(()=>p.remove(),3500)}}
+function showWinner(name){if($("winnerPanel")){$("winnerPanel").classList.remove("hidden");$("winnerMessage").innerHTML="🏆 BINGO!<br>Speler "+esc(name)+" heeft gewonnen!"}if($("hostBingoPanel")){$("hostBingoPanel").classList.remove("hidden");$("hostBingoMessage").innerHTML="🏆 BINGO!<br>Speler "+esc(name)+" heeft gewonnen!"}confetti();tune();setTimeout(()=>speak(name),700)}
+function listenBingo(room){db.ref("rooms/"+room+"/bingos").on("child_added",s=>{let b=s.val()||{},key=s.key+"_"+(b.roundId||"");if(key===lastBingoKey)return;lastBingoKey=key;localStorage.hb_last_bingo_key=key;showWinner(b.name||"onbekend")})}
+
+init();
+
+
+/* =========================
+   V4 PICKER FIX
+   Spelers zien dezelfde discobal/draairad animatie als host
+   ========================= */
+
+function sharedPickerHTML(mode){
+  if(mode === "wheel"){
+    return `<div class="playerPickerBig">
+      <div class="wheelWrap"><div class="pointer"></div><div class="wheel"></div></div>
+      <div class="pickerTitle">Draairad draait...</div>
+    </div>`;
+  }
+
+  return `<div class="playerPickerBig">
+    <div class="discoIcon">🪩</div>
+    <div class="pickerTitle">Discobal kiest...</div>
+  </div>`;
+}
+
+// Override startRoundVisual: stuur pickerStatus meteen naar Firebase
+startRoundVisual = function(room){
+  $("hostAnswerArea").innerHTML = "";
+  $("playBtn").disabled = true;
+  $("showAnswerBtn").disabled = true;
+
+  const mode = Math.random() < .5 ? "disco" : "wheel";
+  const pickerMarkup = sharedPickerHTML(mode);
+
+  $("hostPickerArea").innerHTML = pickerMarkup;
+  currentRoundId = "r_" + Date.now();
+
+  // Belangrijk: dit wordt direct naar spelers gestuurd
+  db.ref("rooms/" + room + "/currentRound").set({
+    id: currentRoundId,
+    status: "picking",
+    pickerMode: mode,
+    pickerMarkup: pickerMarkup,
+    pickerStartedAt: firebase.database.ServerValue.TIMESTAMP,
+    seconds: Number($("duration").value) || 20
+  }).then(() => {
+    if($("hostStatus")) $("hostStatus").textContent = "Kleurkiezer draait bij host en spelers...";
+  });
+
+  setTimeout(() => {
+    flash();
+
+    const color = pick(COLORS);
+    const cat = $(color.input).value || "Geen categorie";
+
+    $("hostPickerArea").innerHTML =
+      `<div class="colorDisplay">${color.emoji}<br>${color.name}</div>
+       <div class="categoryDisplay">${esc(cat)}</div>`;
+
+    const round = {
+      id: currentRoundId,
+      status: "ready",
+      pickerMode: mode,
+      pickerMarkup: pickerMarkup,
+      colorKey: color.key,
+      colorName: color.name,
+      colorEmoji: color.emoji,
+      category: cat,
+      seconds: Number($("duration").value) || 20
+    };
+
+    db.ref("rooms/" + room + "/currentRound").set(round);
+
+    $("playBtn").disabled = false;
+    $("showAnswerBtn").disabled = false;
+    $("hostScorePanel").classList.remove("hidden");
+  }, 3500);
+};
+
+function renderPlayerPickerFixed(round){
+  const area = $("playerPickerArea");
+  if(!area) return;
+
+  area.innerHTML = round.pickerMarkup || sharedPickerHTML(round.pickerMode || "disco");
+}
+
+// Override listenPlayer met expliciete picking status
+listenPlayer = function(){
+  db.ref("rooms/" + currentRoomCode).on("value", s => {
+    const room = s.val() || {};
+    const r = room.currentRound || {};
+    activeRound = r;
+
+    renderLobby(room);
+
+    if(!r.id){
+      showScreen("screenLobby");
+      return;
+    }
+
+    if(r.status === "picking"){
+      renderPlayerPickerFixed(r);
+      showScreen("screenPicker");
+      return;
+    }
+
+    if(r.status === "ready"){
+      renderColor(r);
+      showScreen("screenColor");
+      return;
+    }
+
+    if(r.status === "answering"){
+      renderAnswer(room, r);
+      showScreen("screenAnswer");
+      return;
+    }
+
+    if(r.status === "locked"){
+      renderScore(room);
+      showScreen("screenScore");
+      return;
+    }
+
+    if(r.status === "judged"){
+      renderScore(room);
+      const me = room.players?.[currentPlayerId] || {};
+      const good = room.correct?.[r.id]?.[currentPlayerId] === true;
+      const picked = me.lastPickedRound === r.id;
+
+      if(good && !picked){
+        renderPick(room, r);
+        showScreen("screenPick");
+      }else{
+        showScreen("screenScore");
+      }
+    }
+  });
+
+  listenBingo(currentRoomCode);
+};
+
+
+/* =========================
+   V4.1 FLOW FIX
+   Correcte flow:
+   START RONDE -> picker bij host + spelers
+   kleur/categorie zichtbaar
+   pas bij SPEEL NUMMER -> spelers naar antwoordscherm
+   timer klaar -> automatisch antwoord tonen + ronde locked
+   ========================= */
+
+function answerObjectV41(){
+  if(!currentTrack) return null;
+  return {
+    track: currentTrack.name || "",
+    artist: currentTrack.artists || "",
+    album: currentTrack.album || "",
+    year: (currentTrack.release_date || "").slice(0,4) || ""
+  };
+}
+
+function showHostAnswerV41(ans){
+  const area = document.getElementById("hostAnswerArea");
+  if(!area || !ans) return;
+  area.innerHTML =
+    `<div class="correctBox">
+      <h3>${esc(ans.track || "-")}</h3>
+      <p>${esc(ans.artist || "-")}</p>
+      <p>${esc(ans.album || "-")} — ${esc(ans.year || "-")}</p>
+    </div>`;
+}
+
+function publishAnswerV41(){
+  const room = currentRoomCode || localStorage.getItem("hb_host_room");
+  const ans = answerObjectV41();
+  if(!db || !room || !ans) return Promise.resolve();
+
+  showHostAnswerV41(ans);
+
+  return db.ref("rooms/" + room + "/currentRound").update({
+    correctAnswer: ans,
+    correctAnswerShown: true
+  });
+}
+
+// Alleen locken NA timer, inclusief antwoord zichtbaar maken
+lockRound = function(){
+  const room = currentRoomCode || localStorage.getItem("hb_host_room");
+  if(!db || !room) return;
+
+  publishAnswerV41().then(() => {
+    return db.ref("rooms/" + room + "/currentRound").update({
+      status: "locked"
+    });
+  }).then(() => {
+    const st = document.getElementById("hostStatus");
+    if(st) st.textContent = "Tijd voorbij. Antwoord automatisch zichtbaar bij spelers.";
+  }).catch(e => alert("Timer/antwoord fout: " + e.message));
+};
+
+// Toon antwoord knop blijft handmatig kunnen
+showAnswer = function(){
+  publishAnswerV41().catch(e => alert("Antwoord tonen mislukt: " + e.message));
+};
+
+// Speel knop: zet pas HIER de ronde op answering
+playHidden = async function(){
+  try{
+    if(!currentTrack){
+      alert("Geen nummer gekozen. Druk eerst op START RONDE.");
+      return;
+    }
+
+    const playBtn = document.getElementById("playBtn");
+    if(playBtn){
+      playBtn.disabled = true;
+      playBtn.textContent = "🎵 Nummer speelt...";
+    }
+
+    if(!deviceId){
+      await activatePlayer();
+      await new Promise(r => setTimeout(r, 1200));
+    }
+
+    if(!deviceId){
+      alert("Geen Spotify-speler actief. Klik eerst op Activeer Spotify-speler.");
+      if(playBtn){
+        playBtn.disabled = false;
+        playBtn.textContent = "🎵 Speel verborgen nummer";
+      }
+      return;
+    }
+
+    const dur = (Number(document.getElementById("duration").value) || 20) * 1000;
+    let pos = 0;
+
+    if(document.getElementById("randomStart").checked && currentTrack.duration_ms > dur + 40000){
+      const max = Math.max(0, currentTrack.duration_ms - dur - 5000);
+      pos = Math.floor(20000 + Math.random() * Math.max(1, max - 20000));
+    }
+
+    await api(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+      method: "PUT",
+      body: JSON.stringify({uris:[currentTrack.uri], position_ms:pos})
+    });
+
+    const room = currentRoomCode || localStorage.getItem("hb_host_room");
+    const deadline = Date.now() + dur;
+
+    await db.ref("rooms/" + room + "/currentRound").update({
+      status: "answering",
+      deadlineMs: deadline,
+      musicStartedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    const stopBtn = document.getElementById("stopBtn");
+    if(stopBtn) stopBtn.disabled = false;
+
+    clearTimeout(lockTimer);
+    lockTimer = setTimeout(lockRound, dur);
+
+    clearTimeout(stopTimer);
+    stopTimer = setTimeout(stopPlayback, dur);
+
+    const st = document.getElementById("hostStatus");
+    if(st) st.textContent = "Muziek speelt. Spelers kunnen nu antwoorden.";
+
+  }catch(e){
+    alert("Afspelen mislukt: " + e.message);
+    const playBtn = document.getElementById("playBtn");
+    if(playBtn){
+      playBtn.disabled = false;
+      playBtn.textContent = "🎵 Speel verborgen nummer";
+    }
+  }
+};
+
+// Start ronde: na picker blijft speler op kleur/categorie tot muziek echt start
+// Deze override zorgt ook dat speelknop opnieuw goed enabled is.
+startRoundVisual = function(room){
+  document.getElementById("hostAnswerArea").innerHTML = "";
+  document.getElementById("playBtn").disabled = true;
+  document.getElementById("showAnswerBtn").disabled = true;
+  document.getElementById("playBtn").textContent = "🎵 Speel verborgen nummer";
+
+  const mode = Math.random() < .5 ? "disco" : "wheel";
+  const pickerMarkup = typeof sharedPickerHTML === "function"
+    ? sharedPickerHTML(mode)
+    : pickerHTML(mode);
+
+  document.getElementById("hostPickerArea").innerHTML = pickerMarkup;
+  currentRoundId = "r_" + Date.now();
+
+  db.ref("rooms/" + room + "/currentRound").set({
+    id: currentRoundId,
+    status: "picking",
+    pickerMode: mode,
+    pickerMarkup: pickerMarkup,
+    pickerStartedAt: firebase.database.ServerValue.TIMESTAMP,
+    seconds: Number(document.getElementById("duration").value) || 20
+  });
+
+  setTimeout(() => {
+    flash();
+
+    const color = pick(COLORS);
+    const cat = document.getElementById(color.input).value || "Geen categorie";
+
+    document.getElementById("hostPickerArea").innerHTML =
+      `<div class="colorDisplay">${color.emoji}<br>${color.name}</div>
+       <div class="categoryDisplay">${esc(cat)}</div>`;
+
+    const round = {
+      id: currentRoundId,
+      status: "ready",
+      pickerMode: mode,
+      pickerMarkup: pickerMarkup,
+      colorKey: color.key,
+      colorName: color.name,
+      colorEmoji: color.emoji,
+      category: cat,
+      seconds: Number(document.getElementById("duration").value) || 20
+    };
+
+    db.ref("rooms/" + room + "/currentRound").set(round);
+
+    document.getElementById("playBtn").disabled = false;
+    document.getElementById("showAnswerBtn").disabled = false;
+    document.getElementById("hostScorePanel").classList.remove("hidden");
+
+    const st = document.getElementById("hostStatus");
+    if(st) st.textContent = "Kleur bekend. Klik nu op Speel verborgen nummer.";
+  }, 3500);
+};
+
+// Player listener strak: ready = kleur/categorie tonen, answering = antwoordscherm
+listenPlayer = function(){
+  db.ref("rooms/" + currentRoomCode).on("value", s => {
+    const room = s.val() || {};
+    const r = room.currentRound || {};
+    activeRound = r;
+
+    renderLobby(room);
+
+    if(!r.id){
+      showScreen("screenLobby");
+      return;
+    }
+
+    if(r.status === "picking"){
+      if(typeof renderPlayerPickerFixed === "function") renderPlayerPickerFixed(r);
+      else renderPlayerPicker(r);
+      showScreen("screenPicker");
+      return;
+    }
+
+    if(r.status === "ready"){
+      renderColor(r);
+      showScreen("screenColor");
+      return;
+    }
+
+    if(r.status === "answering"){
+      renderAnswer(room, r);
+      showScreen("screenAnswer");
+      return;
+    }
+
+    if(r.status === "locked"){
+      renderScore(room);
+      showScreen("screenScore");
+      return;
+    }
+
+    if(r.status === "judged"){
+      renderScore(room);
+      const me = room.players?.[currentPlayerId] || {};
+      const good = room.correct?.[r.id]?.[currentPlayerId] === true;
+      const picked = me.lastPickedRound === r.id;
+
+      if(good && !picked){
+        renderPick(room, r);
+        showScreen("screenPick");
+      }else{
+        showScreen("screenScore");
+      }
+    }
+  });
+
+  listenBingo(currentRoomCode);
+};
+
+// Rebind knoppen, omdat oude listeners naar oude functies kunnen wijzen
+function rebindHostButtonsV41(){
+  const bindings = [
+    ["playBtn", playHidden],
+    ["showAnswerBtn", showAnswer],
+    ["lockBtn", lockRound]
+  ];
+
+  bindings.forEach(([id, fn]) => {
+    const old = document.getElementById(id);
+    if(!old) return;
+    const fresh = old.cloneNode(true);
+    old.parentNode.replaceChild(fresh, old);
+    fresh.addEventListener("click", fn);
+  });
+}
+
+setTimeout(rebindHostButtonsV41, 400);
+setTimeout(rebindHostButtonsV41, 1200);
+
+
+/* =========================
+   V4.2 REALTIME SCOREBOARD
+   Na eigen antwoord direct live scorebord van HUIDIGE ronde
+   ========================= */
+
+let lastSeenRoundIdRealtime = "";
+
+// Reset oude score zodra er een nieuwe ronde is
+function clearRealtimeRoundUi(roundId){
+  if(!roundId || lastSeenRoundIdRealtime === roundId) return;
+  lastSeenRoundIdRealtime = roundId;
+
+  const score = document.getElementById("playerScoreboard");
+  if(score) score.innerHTML = "Nog geen antwoorden voor deze ronde.";
+
+  const correct = document.getElementById("correctAnswerBox");
+  if(correct){
+    correct.classList.add("hidden");
+    correct.innerHTML = "";
+  }
+
+  const answer = document.getElementById("answerInput");
+  if(answer) answer.value = "";
+
+  const status = document.getElementById("answerStatus");
+  if(status) status.textContent = "";
+
+  const timer = document.getElementById("timerBox");
+  if(timer) timer.textContent = "⏱️ --";
+}
+
+function playerHasAnsweredCurrentRound(room, round){
+  return !!(round && round.id && room.answers && room.answers[round.id] && room.answers[round.id][currentPlayerId]);
+}
+
+function renderScoreRealtime(room){
+  const r = room.currentRound || {};
+  if(!r.id) return;
+
+  clearRealtimeRoundUi(r.id);
+
+  const box = document.getElementById("correctAnswerBox");
+  const ans = r.correctAnswer;
+
+  if(box){
+    if(ans){
+      box.classList.remove("hidden");
+      box.innerHTML =
+        `<h3>✅ Juiste antwoord</h3>
+         <p>🎵 ${esc(ans.track || "-")}</p>
+         <p>👤 ${esc(ans.artist || "-")}</p>
+         <p>📅 ${esc(ans.year || "-")}</p>
+         <p>💿 ${esc(ans.album || "-")}</p>`;
+    }else{
+      box.classList.add("hidden");
+      box.innerHTML = "";
+    }
+  }
+
+  const players = room.players || {};
+  const answers = room.answers && room.answers[r.id] ? room.answers[r.id] : {};
+  const correct = room.correct && room.correct[r.id] ? room.correct[r.id] : {};
+
+  const score = document.getElementById("playerScoreboard");
+  if(!score) return;
+
+  score.innerHTML = Object.entries(players).map(([pid,p]) => {
+    const hasAnswer = answers[pid] && typeof answers[pid].answer !== "undefined";
+    const answerText = hasAnswer && String(answers[pid].answer).trim()
+      ? answers[pid].answer
+      : (hasAnswer ? "Leeg antwoord" : "Nog niet ingevuld");
+
+    let st = undefined;
+    if(r.status === "judged") st = correct[pid];
+
+    const cls = st === true ? "scoreGood" : st === false ? "scoreBad" : "scorePending";
+    const icon = st === true ? "✅" : st === false ? "❌" : (hasAnswer ? "📝" : "⏳");
+
+    return `<div class="scoreCard ${cls}">
+      <div class="scoreName" onclick="showOther('${pid}')">${esc(p.name || "Speler")}${pid===currentPlayerId ? " (jij)" : ""}</div>
+      <div>${esc(answerText)}</div>
+      <div>${icon}</div>
+    </div>`;
+  }).join("") || "Nog geen spelers.";
+}
+
+// Override renderScore overal naar realtime versie
+renderScore = renderScoreRealtime;
+
+// Na insturen direct naar live scorebord van huidige ronde
+submitAnswer = function(){
+  if(!activeRound?.id) return;
+
+  const answer = document.getElementById("answerInput").value || "";
+
+  db.ref("rooms/" + currentRoomCode + "/answers/" + activeRound.id + "/" + currentPlayerId)
+    .set({
+      answer: answer,
+      submittedAt: firebase.database.ServerValue.TIMESTAMP
+    })
+    .then(() => {
+      const input = document.getElementById("answerInput");
+      const btn = document.getElementById("submitAnswerBtn");
+      const status = document.getElementById("answerStatus");
+
+      if(input) input.disabled = true;
+      if(btn) btn.disabled = true;
+      if(status) status.textContent = "🔒 Antwoord ingeleverd.";
+
+      return db.ref("rooms/" + currentRoomCode).once("value");
+    })
+    .then(s => {
+      renderScoreRealtime(s.val() || {});
+      showScreen("screenScore");
+    })
+    .catch(e => alert("Antwoord opslaan mislukt: " + e.message));
+};
+
+// Player listener: tijdens answering naar scorebord als jij al antwoord hebt gegeven
+listenPlayer = function(){
+  db.ref("rooms/" + currentRoomCode).on("value", s => {
+    const room = s.val() || {};
+    const r = room.currentRound || {};
+    activeRound = r;
+
+    if(r.id) clearRealtimeRoundUi(r.id);
+
+    renderLobby(room);
+
+    if(!r.id){
+      showScreen("screenLobby");
+      return;
+    }
+
+    if(r.status === "picking"){
+      if(typeof renderPlayerPickerFixed === "function") renderPlayerPickerFixed(r);
+      else renderPlayerPicker(r);
+      showScreen("screenPicker");
+      return;
+    }
+
+    if(r.status === "ready"){
+      renderColor(r);
+      showScreen("screenColor");
+      return;
+    }
+
+    if(r.status === "answering"){
+      if(playerHasAnsweredCurrentRound(room, r)){
+        renderScoreRealtime(room);
+        showScreen("screenScore");
+      }else{
+        renderAnswer(room, r);
+        showScreen("screenAnswer");
+      }
+      return;
+    }
+
+    if(r.status === "locked"){
+      renderScoreRealtime(room);
+      showScreen("screenScore");
+      return;
+    }
+
+    if(r.status === "judged"){
+      renderScoreRealtime(room);
+
+      const me = room.players?.[currentPlayerId] || {};
+      const good = room.correct?.[r.id]?.[currentPlayerId] === true;
+      const picked = me.lastPickedRound === r.id;
+
+      if(good && !picked){
+        renderPick(room, r);
+        showScreen("screenPick");
+      }else{
+        showScreen("screenScore");
+      }
+    }
+  });
+
+  listenBingo(currentRoomCode);
+};
+
+// Rebind submit knop naar nieuwe functie
+setTimeout(() => {
+  const btn = document.getElementById("submitAnswerBtn");
+  if(btn){
+    const fresh = btn.cloneNode(true);
+    btn.parentNode.replaceChild(fresh, btn);
+    fresh.addEventListener("click", submitAnswer);
+  }
+}, 500);
+
+
+/* =========================
+   V4.3 ANTWOORDVELD LEEG BIJ NIEUWE RONDE
+   ========================= */
+
+let answerInputRoundIdV43 = "";
+
+function resetAnswerInputForRoundV43(roundId){
+  if(!roundId) return;
+
+  if(answerInputRoundIdV43 !== roundId){
+    answerInputRoundIdV43 = roundId;
+
+    const input = document.getElementById("answerInput");
+    const btn = document.getElementById("submitAnswerBtn");
+    const status = document.getElementById("answerStatus");
+
+    if(input){
+      input.value = "";
+      input.disabled = false;
+    }
+    if(btn) btn.disabled = false;
+    if(status) status.textContent = "";
+  }
+}
+
+// Override renderAnswer zodat oude antwoord nooit blijft staan
+renderAnswer = function(room, r){
+  resetAnswerInputForRoundV43(r.id);
+
+  const info = document.getElementById("answerRoundInfo");
+  if(info) info.textContent = `${r.colorEmoji || ""} ${r.colorName || ""} — ${r.category || ""}`;
+
+  const input = document.getElementById("answerInput");
+  const btn = document.getElementById("submitAnswerBtn");
+  const status = document.getElementById("answerStatus");
+
+  const existing = room.answers && room.answers[r.id] ? room.answers[r.id][currentPlayerId] : null;
+
+  if(existing){
+    if(input){
+      input.value = existing.answer || "";
+      input.disabled = true;
+    }
+    if(btn) btn.disabled = true;
+    if(status) status.textContent = "🔒 Antwoord ingeleverd.";
+  }else{
+    if(input){
+      input.value = "";
+      input.disabled = false;
+    }
+    if(btn) btn.disabled = false;
+    if(status) status.textContent = "Typ je antwoord.";
+  }
+
+  clearInterval(screenTimer);
+  screenTimer = setInterval(() => {
+    const left = Math.max(0, Math.ceil(((r.deadlineMs || 0) - Date.now()) / 1000));
+    const timer = document.getElementById("timerBox");
+    if(timer) timer.textContent = "⏱️ " + left + " sec";
+
+    if(left <= 0){
+      clearInterval(screenTimer);
+      if(input) input.disabled = true;
+      if(btn) btn.disabled = true;
+      if(status) status.textContent = "🔒 Tijd voorbij.";
+    }
+  }, 300);
+};
+
+// Extra zekerheid: bij status ready/picking ook invulveld leegmaken voor nieuwe ronde
+const oldListenPlayerV43 = listenPlayer;
+listenPlayer = function(){
+  db.ref("rooms/" + currentRoomCode).on("value", s => {
+    const room = s.val() || {};
+    const r = room.currentRound || {};
+    activeRound = r;
+
+    if(r.id && r.id !== answerInputRoundIdV43 && (r.status === "picking" || r.status === "ready")){
+      resetAnswerInputForRoundV43(r.id);
+    }
+
+    renderLobby(room);
+
+    if(!r.id){
+      showScreen("screenLobby");
+      return;
+    }
+
+    if(r.status === "picking"){
+      if(typeof renderPlayerPickerFixed === "function") renderPlayerPickerFixed(r);
+      else renderPlayerPicker(r);
+      showScreen("screenPicker");
+      return;
+    }
+
+    if(r.status === "ready"){
+      renderColor(r);
+      showScreen("screenColor");
+      return;
+    }
+
+    if(r.status === "answering"){
+      if(typeof playerHasAnsweredCurrentRound === "function" && playerHasAnsweredCurrentRound(room, r)){
+        renderScore(room);
+        showScreen("screenScore");
+      }else{
+        renderAnswer(room, r);
+        showScreen("screenAnswer");
+      }
+      return;
+    }
+
+    if(r.status === "locked"){
+      renderScore(room);
+      showScreen("screenScore");
+      return;
+    }
+
+    if(r.status === "judged"){
+      renderScore(room);
+      const me = room.players?.[currentPlayerId] || {};
+      const good = room.correct?.[r.id]?.[currentPlayerId] === true;
+      const picked = me.lastPickedRound === r.id;
+
+      if(good && !picked){
+        renderPick(room, r);
+        showScreen("screenPick");
+      }else{
+        showScreen("screenScore");
+      }
+    }
+  });
+
+  listenBingo(currentRoomCode);
+};
+
+
+/* =========================
+   V4.4 ZELFDE SCHERM
+   Scorebord blijft altijd staan.
+   Antwoordveld wordt vervangen door juiste antwoord.
+   ========================= */
+
+let activeScoreRoundIdV44 = "";
+
+function renderDynamicAnswerBlockV44(room){
+  const r = room.currentRound || {};
+  const block = document.getElementById("dynamicAnswerBlock");
+  if(!block || !r.id) return;
+
+  const ownAnswer = room.answers && room.answers[r.id] ? room.answers[r.id][currentPlayerId] : null;
+  const ans = r.correctAnswer;
+
+  // Timer klaar / locked / judged: antwoordveld weg, juiste antwoord op dezelfde plek
+  if(ans && (r.status === "locked" || r.status === "judged")){
+    block.innerHTML =
+      `<h3>✅ Juiste antwoord</h3>
+       <p>🎵 <strong>${esc(ans.track || "-")}</strong></p>
+       <p>👤 ${esc(ans.artist || "-")}</p>
+       <p>📅 ${esc(ans.year || "-")}</p>
+       <p>💿 ${esc(ans.album || "-")}</p>`;
+    return;
+  }
+
+  // Na insturen, maar timer loopt nog
+  if(ownAnswer){
+    block.innerHTML =
+      `<h3>🔒 Antwoord ingeleverd</h3>
+       <p class="submitted">Jouw antwoord: ${esc(ownAnswer.answer || "Leeg antwoord")}</p>
+       <p class="small">Wachten tot de tijd voorbij is...</p>`;
+    return;
+  }
+
+  // Tijdens answering nog geen antwoord: compact invoerveld in hetzelfde scherm
+  if(r.status === "answering"){
+    block.innerHTML =
+      `<h3>✍️ Vul je antwoord in</h3>
+       <p class="small">${esc(r.colorEmoji || "")} ${esc(r.colorName || "")} — ${esc(r.category || "")}</p>
+       <div id="scoreTimerBox" class="timer">⏱️ --</div>
+       <div class="compactInputRow">
+         <input id="scoreAnswerInput" placeholder="Typ je antwoord">
+         <button id="scoreSubmitAnswerBtn">Verstuur antwoord</button>
+       </div>`;
+
+    const btn = document.getElementById("scoreSubmitAnswerBtn");
+    if(btn){
+      btn.addEventListener("click", () => {
+        const val = document.getElementById("scoreAnswerInput")?.value || "";
+        submitAnswerValueV44(val);
+      });
+    }
+    startScoreTimerV44(r);
+    return;
+  }
+
+  // Ready/picking fallback
+  block.innerHTML =
+    `<h3>🎵 Wachten op muziek</h3>
+     <p class="small">${esc(r.colorEmoji || "")} ${esc(r.colorName || "")} ${r.category ? "— " + esc(r.category) : ""}</p>`;
+}
+
+function startScoreTimerV44(r){
+  clearInterval(window.__scoreTimerV44);
+  window.__scoreTimerV44 = setInterval(() => {
+    const left = Math.max(0, Math.ceil(((r.deadlineMs || 0) - Date.now()) / 1000));
+    const el = document.getElementById("scoreTimerBox");
+    if(el) el.textContent = "⏱️ " + left + " sec";
+    if(left <= 0) clearInterval(window.__scoreTimerV44);
+  }, 300);
+}
+
+function submitAnswerValueV44(value){
+  if(!activeRound?.id) return;
+
+  db.ref("rooms/" + currentRoomCode + "/answers/" + activeRound.id + "/" + currentPlayerId)
+    .set({
+      answer: value || "",
+      submittedAt: firebase.database.ServerValue.TIMESTAMP
+    })
+    .catch(e => alert("Antwoord opslaan mislukt: " + e.message));
+}
+
+function renderScoreV44(room){
+  const r = room.currentRound || {};
+  if(!r.id) return;
+
+  renderDynamicAnswerBlockV44(room);
+
+  const players = room.players || {};
+  const answers = room.answers && room.answers[r.id] ? room.answers[r.id] : {};
+  const correct = room.correct && room.correct[r.id] ? room.correct[r.id] : {};
+
+  const score = document.getElementById("playerScoreboard");
+  if(!score) return;
+
+  score.innerHTML = Object.entries(players).map(([pid,p]) => {
+    const hasAnswer = answers[pid] && typeof answers[pid].answer !== "undefined";
+    const answerText = hasAnswer && String(answers[pid].answer).trim()
+      ? answers[pid].answer
+      : (hasAnswer ? "Leeg antwoord" : "Nog niet ingevuld");
+
+    let st = undefined;
+    if(r.status === "judged") st = correct[pid];
+
+    const cls = st === true ? "scoreGood" : st === false ? "scoreBad" : "scorePending";
+    const icon = st === true ? "✅" : st === false ? "❌" : (hasAnswer ? "📝" : "⏳");
+
+    return `<div class="scoreCard ${cls}">
+      <div class="scoreName" onclick="showOther('${pid}')">${esc(p.name || "Speler")}${pid===currentPlayerId ? " (jij)" : ""}</div>
+      <div>${esc(answerText)}</div>
+      <div>${icon}</div>
+    </div>`;
+  }).join("") || "Nog geen spelers.";
+}
+
+// Score-scherm wordt nu ook gebruikt tijdens answering
+renderScore = renderScoreV44;
+
+submitAnswer = function(){
+  const val = document.getElementById("answerInput")?.value || "";
+  submitAnswerValueV44(val);
+};
+
+// Nieuwe listener: tijdens answering altijd score-scherm tonen.
+// Als je nog niet hebt ingevuld, staat antwoordveld boven scorebord.
+// Na invullen verdwijnt dat veld en blijft scorebord staan.
+listenPlayer = function(){
+  db.ref("rooms/" + currentRoomCode).on("value", s => {
+    const room = s.val() || {};
+    const r = room.currentRound || {};
+    activeRound = r;
+
+    renderLobby(room);
+
+    if(!r.id){
+      showScreen("screenLobby");
+      return;
+    }
+
+    if(r.status === "picking"){
+      if(typeof renderPlayerPickerFixed === "function") renderPlayerPickerFixed(r);
+      else renderPlayerPicker(r);
+      showScreen("screenPicker");
+      return;
+    }
+
+    if(r.status === "ready"){
+      renderColor(r);
+      showScreen("screenColor");
+      return;
+    }
+
+    if(r.status === "answering"){
+      renderScoreV44(room);
+      showScreen("screenScore");
+      return;
+    }
+
+    if(r.status === "locked"){
+      renderScoreV44(room);
+      showScreen("screenScore");
+      return;
+    }
+
+    if(r.status === "judged"){
+      renderScoreV44(room);
+
+      const me = room.players?.[currentPlayerId] || {};
+      const good = room.correct?.[r.id]?.[currentPlayerId] === true;
+      const picked = me.lastPickedRound === r.id;
+
+      if(good && !picked){
+        renderPick(room, r);
+        showScreen("screenPick");
+      }else{
+        showScreen("screenScore");
+      }
+    }
+  });
+
+  listenBingo(currentRoomCode);
+};
+
+// Rebind oude submit voor zekerheid
+setTimeout(() => {
+  const btn = document.getElementById("submitAnswerBtn");
+  if(btn){
+    const fresh = btn.cloneNode(true);
+    btn.parentNode.replaceChild(fresh, btn);
+    fresh.addEventListener("click", submitAnswer);
+  }
+}, 500);
