@@ -1,1 +1,0 @@
-Schone V3. Verwijder oude bestanden in GitHub en upload alleen deze 3 bestanden.
