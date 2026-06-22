@@ -4849,3 +4849,139 @@ setInterval(bbRemoveChecksCrownsV32,1000);
     }
   },500);
 })();
+
+
+/* =========================
+   V56 - Nieuwe kamer / Nieuw spel starten
+   ========================= */
+
+function bbOpenNewGameModal(){
+  const modal = document.getElementById("newGameModal");
+  if(!currentRoomCode){
+    alert("Maak eerst een kamer.");
+    return;
+  }
+  if(modal) modal.classList.remove("hidden");
+}
+
+function bbCloseNewGameModal(){
+  const modal = document.getElementById("newGameModal");
+  if(modal) modal.classList.add("hidden");
+}
+
+function bbResetHostRoundUi(){
+  const hostScorePanel = document.getElementById("hostScorePanel");
+  if(hostScorePanel) hostScorePanel.classList.add("hidden");
+
+  const hostScoreboard = document.getElementById("hostScoreboard");
+  if(hostScoreboard) hostScoreboard.innerHTML = "";
+
+  const hostBingoPanel = document.getElementById("hostBingoPanel");
+  if(hostBingoPanel) hostBingoPanel.classList.add("hidden");
+
+  const hostBingoMessage = document.getElementById("hostBingoMessage");
+  if(hostBingoMessage) hostBingoMessage.innerHTML = "🏆";
+
+  const winnerPanel = document.getElementById("winnerPanel");
+  if(winnerPanel) winnerPanel.classList.add("hidden");
+
+  const bingoOverlay = document.getElementById("bingoFullOverlay");
+  if(bingoOverlay) bingoOverlay.classList.add("hidden");
+
+  const picker = document.getElementById("hostPickerArea");
+  if(picker) picker.innerHTML = "🪩<br>Klaar om te spelen";
+
+  const answer = document.getElementById("hostAnswerArea");
+  if(answer) answer.innerHTML = "";
+
+  const playBtn = document.getElementById("playBtn");
+  if(playBtn) playBtn.disabled = true;
+
+  const stopBtn = document.getElementById("stopBtn");
+  if(stopBtn) stopBtn.disabled = true;
+
+  const showAnswerBtn = document.getElementById("showAnswerBtn");
+  if(showAnswerBtn) showAnswerBtn.disabled = true;
+}
+
+function bbStartNewGameSameRoom(){
+  if(!currentRoomCode){
+    alert("Maak eerst een kamer.");
+    bbCloseNewGameModal();
+    return;
+  }
+
+  const room = currentRoomCode;
+
+  db.ref("rooms/" + room).once("value").then(s => {
+    const data = s.val() || {};
+    const players = data.players || {};
+    const updates = {};
+
+    updates["rooms/" + room + "/currentRound"] = null;
+    updates["rooms/" + room + "/answers"] = null;
+    updates["rooms/" + room + "/correct"] = null;
+    updates["rooms/" + room + "/bingos"] = null;
+    updates["rooms/" + room + "/winner"] = null;
+    updates["rooms/" + room + "/roundResetAt"] = firebase.database.ServerValue.TIMESTAMP;
+
+    Object.keys(players).forEach(pid => {
+      updates["rooms/" + room + "/players/" + pid + "/card"] = genCard();
+      updates["rooms/" + room + "/players/" + pid + "/marked"] = {};
+      updates["rooms/" + room + "/players/" + pid + "/bingo"] = false;
+      updates["rooms/" + room + "/players/" + pid + "/ready"] = false;
+      updates["rooms/" + room + "/players/" + pid + "/lastPickedRound"] = null;
+    });
+
+    return db.ref().update(updates);
+  }).then(() => {
+    bbCloseNewGameModal();
+    bbResetHostRoundUi();
+
+    const status = document.getElementById("hostStatus");
+    if(status) status.textContent = "Nieuw spel gestart in dezelfde kamer. Spelers krijgen een nieuwe kaart.";
+
+    const start = document.getElementById("startRoundBtn");
+    if(start){
+      start.disabled = true;
+      start.textContent = "⏳ Wachten op READY";
+    }
+  }).catch(e => {
+    alert("Nieuw spel starten mislukt: " + e.message);
+  });
+}
+
+function bbBindNewGameButtons(){
+  const roomBtn = document.getElementById("newRoomBtn");
+  if(roomBtn) roomBtn.textContent = "🎫 Nieuwe kamer maken";
+
+  const newGameBtn = document.getElementById("newGameBtn");
+  if(newGameBtn && newGameBtn.dataset.bound !== "1"){
+    newGameBtn.dataset.bound = "1";
+    newGameBtn.addEventListener("click", bbOpenNewGameModal);
+  }
+
+  const cancelBtn = document.getElementById("cancelNewGameBtn");
+  if(cancelBtn && cancelBtn.dataset.bound !== "1"){
+    cancelBtn.dataset.bound = "1";
+    cancelBtn.addEventListener("click", bbCloseNewGameModal);
+  }
+
+  const confirmBtn = document.getElementById("confirmNewGameBtn");
+  if(confirmBtn && confirmBtn.dataset.bound !== "1"){
+    confirmBtn.dataset.bound = "1";
+    confirmBtn.addEventListener("click", bbStartNewGameSameRoom);
+  }
+
+  const modal = document.getElementById("newGameModal");
+  if(modal && modal.dataset.bound !== "1"){
+    modal.dataset.bound = "1";
+    modal.addEventListener("click", e => {
+      if(e.target === modal) bbCloseNewGameModal();
+    });
+  }
+}
+
+setTimeout(bbBindNewGameButtons, 50);
+setTimeout(bbBindNewGameButtons, 500);
+setTimeout(bbBindNewGameButtons, 1200);

@@ -60,7 +60,8 @@
 
     <section class="panel">
       <h2>4. Kamer</h2>
-      <button id="newRoomBtn">🎫 Nieuw spel / kamer maken</button>
+      <button id="newRoomBtn">🎫 Nieuwe kamer maken</button>
+      <button id="newGameBtn" class="secondary">🔄 Nieuw spel starten</button>
       <button id="soundBtn" class="secondary"></button>
       <p id="soundStatus" class="small"></p>
 
@@ -201,5 +202,25 @@
 </div>
 
 <script src="app.js"></script>
+
+<div id="newGameModal" class="modalOverlay hidden">
+  <div class="modalCard">
+    <h2>Nieuw spel starten?</h2>
+    <p>Weet je het zeker?</p>
+    <ul>
+      <li>Alle spelers blijven in dezelfde kamer.</li>
+      <li>Alle spelers krijgen een nieuwe bingokaart.</li>
+      <li>Huidige bingo’s worden gewist.</li>
+      <li>De winnaar wordt gewist.</li>
+      <li>De kamercode blijft hetzelfde.</li>
+      <li>Gespeelde nummers blijven onthouden.</li>
+    </ul>
+    <div class="modalActions">
+      <button id="cancelNewGameBtn" class="secondary">Annuleren</button>
+      <button id="confirmNewGameBtn">Ja, nieuw spel starten</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
