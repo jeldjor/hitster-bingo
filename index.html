@@ -11,12 +11,23 @@
 </head>
 <body>
 <div class="app">
-  <header>
+  <section id="licenseScreen" class="licenseScreen">
+    <div class="licenseCard">
+      <h1>🪩 Bingo Beats</h1>
+      <h2>Licentie activeren</h2>
+      <p class="small">Voer je licentiecode in om verder te gaan.</p>
+      <input id="licenseInput" placeholder="Bijv. TEST-2026" autocomplete="off">
+      <button id="licenseBtn">Activeren</button>
+      <p id="licenseStatus" class="small"></p>
+    </div>
+  </section>
+
+  <header id="mainHeader" class="hidden">
     <h1>🪩 Bingo Beats</h1>
     <p id="modeText">Host</p>
   </header>
 
-  <main id="hostApp">
+  <main id="hostApp" class="hidden">
     <section class="panel">
       <h2>1. Spotify</h2>
       <button id="loginBtn">🔐 Login met Spotify</button>

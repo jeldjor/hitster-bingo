@@ -11,7 +11,84 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 const emoji=k=>({yellow:"🟡",pink:"🩵",purple:"🟠",blue:"🟢",green:"🔴",free:bbMonkey()}[k]||"⬜");
 
-function init(){if(!firebase.apps.length)firebase.initializeApp(firebaseConfig);db=firebase.database();wire();handleRedirect().then(updateStatus);setupPlayerMode();restoreHost();setTimeout(()=>{try{hbBootV7B()}catch(e){console.error(e)}},300);}
+function init(){
+  wireLicense();
+  checkLicenseGate();
+}
+
+const TEST_LICENSE_CODE = "TEST-2026";
+
+function wireLicense(){
+  $("licenseBtn")?.addEventListener("click", activateLicense);
+  $("licenseInput")?.addEventListener("keydown", e => {
+    if(e.key === "Enter") activateLicense();
+  });
+}
+
+function checkLicenseGate(){
+  const license = JSON.parse(localStorage.getItem("bb_license") || "null");
+
+  if(!license || license.code !== TEST_LICENSE_CODE || license.active !== true){
+    showLicenseScreen("Voer een geldige licentiecode in.");
+    return;
+  }
+
+  unlockApp();
+}
+
+function activateLicense(){
+  const code = ($("licenseInput")?.value || "").trim().toUpperCase();
+
+  if(code !== TEST_LICENSE_CODE){
+    showLicenseScreen("Ongeldige licentiecode.");
+    return;
+  }
+
+  localStorage.setItem("bb_license", JSON.stringify({
+    code: TEST_LICENSE_CODE,
+    active: true,
+    type: "test",
+    activatedAt: new Date().toISOString()
+  }));
+
+  $("licenseStatus").textContent = "Licentie geactiveerd.";
+  $("licenseStatus").className = "small licenseSuccess";
+
+  setTimeout(unlockApp, 500);
+}
+
+function showLicenseScreen(message){
+  $("licenseScreen")?.classList.remove("hidden");
+  $("mainHeader")?.classList.add("hidden");
+  $("hostApp")?.classList.add("hidden");
+  $("playerApp")?.classList.add("hidden");
+
+  if($("licenseStatus")){
+    $("licenseStatus").textContent = message || "";
+    $("licenseStatus").className = "small licenseError";
+  }
+}
+
+function unlockApp(){
+  $("licenseScreen")?.classList.add("hidden");
+  $("mainHeader")?.classList.remove("hidden");
+
+  if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+
+  wire();
+  handleRedirect().then(updateStatus);
+  setupPlayerMode();
+
+  if(!new URLSearchParams(location.search).get("room")){
+    $("hostApp")?.classList.remove("hidden");
+    restoreHost();
+  }
+
+  setTimeout(() => {
+    try { hbBootV7B(); } catch(e) { console.error(e); }
+  }, 300);
+}
 function wire(){
  $("loginBtn")?.addEventListener("click",login);$("logoutBtn")?.addEventListener("click",logout);$("activateBtn")?.addEventListener("click",activatePlayer);$("csvFile")?.addEventListener("change",handleCsv);$("resetUsedBtn")?.addEventListener("click",()=>{delete localStorage.hb_used;updateStatus()});
  $("newRoomBtn")?.addEventListener("click",createRoom);$("soundBtn")?.addEventListener("click",activateSound);$("startRoundBtn")?.addEventListener("click",startRound);$("playBtn")?.addEventListener("click",playHidden);$("stopBtn")?.addEventListener("click",stopPlayback);$("showAnswerBtn")?.addEventListener("click",showAnswer);$("lockBtn")?.addEventListener("click",lockRound);$("publishBtn")?.addEventListener("click",publishResults);
