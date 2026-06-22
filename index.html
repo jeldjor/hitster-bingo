@@ -13,6 +13,7 @@
 <div class="app">
   <section id="licenseScreen" class="licenseScreen">
     <div class="licenseCard">
+      <img src="assets/bb_logo.png" class="bbLogoHero" alt="Bingo Beats logo">
       <h1>🪩 Bingo Beats</h1>
       <h2>Licentie activeren</h2>
       <p class="small">Voer je licentiecode in om verder te gaan.</p>
@@ -23,6 +24,7 @@
   </section>
 
   <header id="mainHeader" class="hidden">
+    <img src="assets/bb_logo.png" class="bbLogoHeader" alt="Bingo Beats logo">
     <h1>🪩 Bingo Beats</h1>
     <p id="modeText">Host</p>
   </header>
@@ -221,6 +223,54 @@
     </div>
   </div>
 </div>
+
+
+<script>
+// V56 nood-fix: bind de knop pas nadat de hele pagina geladen is.
+(function(){
+  function el(id){ return document.getElementById(id); }
+  function openModal(){
+    if(typeof currentRoomCode !== "undefined" && !currentRoomCode){ alert("Maak eerst een kamer."); return; }
+    const modal = el("newGameModal");
+    if(modal){
+      modal.classList.remove("hidden");
+      modal.style.display = "flex";
+    }
+  }
+  function closeModal(){
+    const modal = el("newGameModal");
+    if(modal){
+      modal.classList.add("hidden");
+      modal.style.display = "none";
+    }
+  }
+  function startSameRoom(){
+    try{
+      if(typeof bbStartNewGameSameRoom === "function"){
+        bbStartNewGameSameRoom();
+        return;
+      }
+      alert("Nieuw spel starten is nog niet geladen. Refresh de pagina en probeer opnieuw.");
+    }catch(e){
+      alert("Nieuw spel starten mislukt: " + e.message);
+    }
+  }
+  function bind(){
+    const btn = el("newGameBtn");
+    const cancel = el("cancelNewGameBtn");
+    const confirm = el("confirmNewGameBtn");
+    const modal = el("newGameModal");
+    if(btn) btn.onclick = openModal;
+    if(cancel) cancel.onclick = closeModal;
+    if(confirm) confirm.onclick = startSameRoom;
+    if(modal) modal.onclick = function(e){ if(e.target === modal) closeModal(); };
+  }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
+  else bind();
+  setTimeout(bind, 500);
+  setTimeout(bind, 1500);
+})();
+</script>
 
 </body>
 </html>

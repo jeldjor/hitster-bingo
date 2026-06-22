@@ -4985,3 +4985,304 @@ function bbBindNewGameButtons(){
 setTimeout(bbBindNewGameButtons, 50);
 setTimeout(bbBindNewGameButtons, 500);
 setTimeout(bbBindNewGameButtons, 1200);
+
+/* V57 - directe klikfeedback op bingovakje voordat Firebase opnieuw rendert */
+document.addEventListener("click", function(e){
+  const cell = e.target && e.target.closest ? e.target.closest(".pickableCell, .compactCell.pickable") : null;
+  if(!cell) return;
+  cell.classList.remove("cellJustPicked");
+  void cell.offsetWidth;
+  cell.classList.add("cellJustPicked");
+}, true);
+
+/* ==================================================
+   V58 Grote bingokaart bij goed/fout antwoord
+   - Goed: overlay blijft staan tot speler een vakje van de actieve kleur kiest.
+   - Fout: overlay toont kaart + DJ-aap loopt nee-schuddend door beeld en sluit automatisch.
+   ================================================== */
+(function(){
+  const MASCOT_SRC = "assets/bb_mascot_dj.png";
+  let badShownKey = "";
+  let goodOpenKey = "";
+
+  function cd(k){
+    return {
+      yellow:{hex:"#FFCC33",dark:"#D99A00",emoji:"🟡",name:"GOUD"},
+      pink:{hex:"#00D4C7",dark:"#008E86",emoji:"🩵",name:"AQUA"},
+      purple:{hex:"#FF8A1F",dark:"#C65400",emoji:"🟠",name:"ORANJE"},
+      blue:{hex:"#7ED957",dark:"#329E26",emoji:"🟢",name:"LIME"},
+      green:{hex:"#FF5A5F",dark:"#C52834",emoji:"🔴",name:"KORAAL"},
+      free:{hex:"#FFCC33",dark:"#fff7c8",emoji:"🐵",name:"FREE"}
+    }[k] || {hex:"#555",dark:"#222",emoji:"",name:""};
+  }
+  function bg(k){const c=cd(k);return k==="free"?"linear-gradient(135deg,#fff7c8,#FFCC33)":`linear-gradient(145deg,${c.hex},${c.dark})`;}
+  function monkey(i){return ["🐵","🙈","🙉","🙊"][Math.abs(Number(i)||0)%4];}
+  function pid(){return (typeof hbSafePidV51 === "function" ? hbSafePidV51() : (currentPlayerId || localStorage.getItem("hb_player_id") || ""));}
+
+  function ensureOverlay(){
+    let ov=document.getElementById("bbPlayerChoiceOverlay");
+    if(ov) return ov;
+    ov=document.createElement("div");
+    ov.id="bbPlayerChoiceOverlay";
+    ov.className="bbPlayerChoiceOverlay hidden";
+    ov.innerHTML=`<div id="bbChoiceModal" class="bbChoiceModal good">
+      <div id="bbChoiceTitle" class="bbChoiceTitle">Goed antwoord!</div>
+      <div id="bbChoiceSub" class="bbChoiceSub">Kies nu een vakje met de kleur van de categorie.</div>
+      <div class="bbChoiceMascotWrap"><img id="bbChoiceMascot" class="bbChoiceMascot good" src="${MASCOT_SRC}" alt="Bingo Beats aap"><div id="bbChoiceX" class="bbChoiceX hidden">×</div></div>
+      <div class="bbChoiceCardTitle">JOUW BINGOKAART</div>
+      <div id="bbChoiceBigCard" class="bbChoiceBigCard"></div>
+      <div id="bbChoiceHint" class="bbChoiceHint"></div>
+    </div>`;
+    document.body.appendChild(ov);
+    return ov;
+  }
+
+  function renderBigCard(room,r,canPick){
+    const p = room.players?.[pid()] || {};
+    const card = Array.isArray(p.card) ? p.card : [];
+    const marked = p.marked || {};
+    const box = document.getElementById("bbChoiceBigCard");
+    if(!box) return;
+    box.innerHTML = card.map((key,i)=>{
+      const isMarked = !!marked[i] || key === "free";
+      const pickable = !!canPick && key === r.colorKey && key !== "free" && !marked[i];
+      const blocked = !!canPick && !pickable && key !== "free" && !marked[i];
+      return `<div class="bbChoiceBigCell ${isMarked?"marked":""} ${pickable?"pickable":""} ${blocked?"blocked":""}" data-i="${i}" style="background:${bg(key)}">${isMarked ? monkey(i) : cd(key).emoji}</div>`;
+    }).join("");
+    box.querySelectorAll(".pickable").forEach(cell=>{
+      const fire=()=>{
+        cell.classList.add("cellJustPicked");
+        if(typeof pickCell === "function") pickCell(Number(cell.dataset.i));
+        const hint=document.getElementById("bbChoiceHint");
+        if(hint) hint.innerHTML="Top! Vakje toegevoegd. We gaan terug naar het normale scherm.";
+        setTimeout(hideOverlay,650);
+      };
+      cell.addEventListener("click",fire,{once:true});
+      cell.addEventListener("touchstart",e=>{e.preventDefault();fire();},{once:true,passive:false});
+    });
+  }
+
+  function showGood(room,r){
+    ensureOverlay();
+    goodOpenKey = r.id;
+    const ov=document.getElementById("bbPlayerChoiceOverlay"), modal=document.getElementById("bbChoiceModal"), mascot=document.getElementById("bbChoiceMascot"), x=document.getElementById("bbChoiceX");
+    modal.className="bbChoiceModal good"; mascot.className="bbChoiceMascot good"; x.classList.add("hidden");
+    document.getElementById("bbChoiceTitle").textContent="Goed antwoord!";
+    document.getElementById("bbChoiceSub").textContent="Kies nu een vakje met de kleur van de categorie.";
+    document.getElementById("bbChoiceHint").innerHTML=`Tik op een <strong>${r.colorEmoji||cd(r.colorKey).emoji} ${r.colorName||cd(r.colorKey).name}</strong> vakje.`;
+    renderBigCard(room,r,true);
+    ov.classList.remove("hidden");
+  }
+
+  function showBad(room,r){
+    const key=(r.id||"")+":bad";
+    if(badShownKey === key || sessionStorage.getItem("bbBadShown_"+key)==="1") return;
+    badShownKey = key; sessionStorage.setItem("bbBadShown_"+key,"1");
+    ensureOverlay();
+    const ov=document.getElementById("bbPlayerChoiceOverlay"), modal=document.getElementById("bbChoiceModal"), mascot=document.getElementById("bbChoiceMascot"), x=document.getElementById("bbChoiceX");
+    modal.className="bbChoiceModal bad"; mascot.className="bbChoiceMascot bad"; x.classList.remove("hidden");
+    document.getElementById("bbChoiceTitle").textContent="Helaas...";
+    document.getElementById("bbChoiceSub").textContent="Dit antwoord is niet goed.";
+    document.getElementById("bbChoiceHint").innerHTML="De aap loopt nee-schuddend door beeld. We gaan zo terug naar het normale scherm.";
+    renderBigCard(room,r,false);
+    ov.classList.remove("hidden");
+    setTimeout(hideOverlay,2600);
+  }
+
+  function hideOverlay(){
+    const ov=document.getElementById("bbPlayerChoiceOverlay");
+    if(ov) ov.classList.add("hidden");
+    goodOpenKey="";
+  }
+
+  function checkFeedback(room){
+    const r=room.currentRound||{};
+    if(!r.id || r.status!=="judged") return;
+    const me=room.players?.[pid()]||{};
+    const result=room.correct?.[r.id]?.[pid()];
+    const picked=me.lastPickedRound===r.id;
+    if(result===true && !picked){
+      const ov=document.getElementById("bbPlayerChoiceOverlay");
+      if(goodOpenKey!==r.id || !ov || ov.classList.contains("hidden")) showGood(room,r);
+    }
+    if(result===false) showBad(room,r);
+  }
+
+  function startWatcher(){
+    const room=(currentRoomCode || localStorage.getItem("hb_player_room") || new URLSearchParams(location.search).get("room") || "").toUpperCase();
+    if(!room || !db) return;
+    db.ref("rooms/"+room).on("value",s=>{
+      try{ checkFeedback(s.val()||{}); }catch(e){ console.warn("V58 feedback overlay", e); }
+    });
+  }
+
+  const oldJoin=window.joinPlayer || joinPlayer;
+  if(typeof oldJoin === "function"){
+    window.joinPlayer = joinPlayer = function(){
+      const res = oldJoin.apply(this, arguments);
+      setTimeout(startWatcher,800);
+      return res;
+    };
+  }
+  setTimeout(startWatcher,1000);
+  setTimeout(startWatcher,2500);
+})();
+
+
+/* ==================================================
+   V59 - Centrale BB-aap kleurenkiezer/categorie-kiezer
+   Zelfde animatie voor host en spelers.
+   ================================================== */
+(function(){
+  const BB_MASCOT = "assets/bb_mascot_dj.png";
+  const BB_LOGO = "assets/bb_logo.png";
+  function safeEsc(v){ return (typeof esc === "function") ? esc(v||"") : String(v||"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m])); }
+  function cdef(k){
+    const found = (typeof COLORS !== "undefined" ? COLORS : []).find(c=>c.key===k);
+    return found || {key:k||"yellow",name:"GOUD",emoji:"🟡",hex:"#FFCC33",input:"cat-yellow"};
+  }
+  function balls(){
+    const cols = (typeof COLORS !== "undefined" ? COLORS : [
+      {hex:"#FFCC33"},{hex:"#00D4C7"},{hex:"#FF8A1F"},{hex:"#7ED957"},{hex:"#FF5A5F"}
+    ]);
+    return cols.map(c=>`<span class="bbV59MiniBall" style="background:${c.hex}"></span>`).join("");
+  }
+  window.bbV59PickerHTML = function(colorKey, reveal, compact, category){
+    const c = cdef(colorKey||"yellow");
+    const style = `style="--bbV59Glow:${c.hex};"`;
+    if(reveal){
+      return `<div class="bbV59Stage ${compact?"compact":""}" data-bb-v59="1" ${style}>
+        <div class="bbV59Title">Kleur & categorie</div>
+        <div class="bbV59Result">
+          <img class="bbV59SmallMascot" src="${BB_MASCOT}" alt="Bingo Beats aap">
+          <div class="bbV59BigBall" style="background:${c.hex}"></div>
+          <div class="bbV59ResultText">
+            <div class="bbV59ColorName">${safeEsc(c.name)}</div>
+            <div class="bbV59Category">${safeEsc(category||"")}</div>
+          </div>
+        </div>
+        <div class="bbV59Sub">De categorie is gekozen.</div>
+      </div>`;
+    }
+    return `<div class="bbV59Stage ${compact?"compact":""}" data-bb-v59="1">
+      <div class="bbV59Title">BB-aap trekt een kleur</div>
+      <div class="bbV59Scene">
+        <img class="bbV59Mascot" src="${BB_MASCOT}" alt="Bingo Beats aap">
+        <div class="bbV59Blind">blind trekken</div>
+        <div class="bbV59Bag"><div class="bbV59MysteryBall">?</div></div>
+      </div>
+      <div class="bbV59Balls">${balls()}</div>
+      <div class="bbV59Sub">De aap kiest blind een gekleurde bal...</div>
+    </div>`;
+  };
+
+  function showResultHTML(r, compact){
+    if(!r || !r.id) return `<div class="bbV59Stage ${compact?"compact":""}" data-bb-v59="1"><div class="bbV59Title">Wachten op host...</div><img class="bbV59SmallMascot" src="${BB_MASCOT}" alt="Bingo Beats aap"><div class="bbV59Sub">Nog geen ronde gestart.</div></div>`;
+    if(r.status === "picking") return window.bbV59PickerHTML(r.colorKey || r.targetColorKey || "yellow", false, compact, r.category || "");
+    return window.bbV59PickerHTML(r.colorKey || r.targetColorKey || "yellow", true, compact, r.category || "");
+  }
+
+  window.pickerHTML = function(){ return window.bbV59PickerHTML("yellow", false, false, ""); };
+  window.sharedPickerHTML = function(){ return window.bbV59PickerHTML("yellow", false, true, ""); };
+  window.renderPlayerPicker = function(r){
+    const p = document.getElementById("playerPickerArea");
+    if(p) p.innerHTML = showResultHTML(r, false);
+    const d = document.getElementById("dashPickerArea");
+    if(d) d.innerHTML = showResultHTML(r, true);
+  };
+  window.renderPlayerPickerFixed = window.renderPlayerPicker;
+  window.renderCompactPicker = function(r){ const d=document.getElementById("dashPickerArea"); if(d) d.innerHTML=showResultHTML(r,true); };
+  window.hbRenderPicker = window.renderCompactPicker;
+  window.renderColor = function(r){
+    const d=document.getElementById("dashPickerArea"); if(d) d.innerHTML=showResultHTML(r,true);
+    const cd=document.getElementById("colorDisplay"); if(cd) cd.innerHTML=`${safeEsc(r.colorEmoji||"")}<br>${safeEsc(r.colorName||"")}`;
+    const cat=document.getElementById("categoryDisplay"); if(cat) cat.textContent=r.category||"";
+  };
+
+  window.hbHostPickerPopupPickingV7I = function(){
+    if(typeof hbHostPickerPopupShowV7I === "function") hbHostPickerPopupShowV7I(window.bbV59PickerHTML("yellow", false, false, ""));
+  };
+  window.hbHostPickerPopupResultV7I = function(color, cat){
+    if(typeof hbHostPickerPopupShowV7I === "function") hbHostPickerPopupShowV7I(window.bbV59PickerHTML(color.key, true, false, cat));
+  };
+
+  window.startRoundVisual = function(room){
+    const hostAnswerArea=document.getElementById("hostAnswerArea"); if(hostAnswerArea) hostAnswerArea.innerHTML="";
+    const playBtn=document.getElementById("playBtn"); if(playBtn){playBtn.disabled=true;playBtn.textContent="🎵 Speel verborgen nummer";}
+    const showAnswerBtn=document.getElementById("showAnswerBtn"); if(showAnswerBtn) showAnswerBtn.disabled=true;
+
+    const color = (typeof pick === "function") ? pick(COLORS) : cdef("yellow");
+    const catEl = document.getElementById(color.input);
+    const cat = (catEl && catEl.value) ? catEl.value : "Geen categorie";
+    currentRoundId = "r_" + Date.now();
+
+    const hostMarkup = window.bbV59PickerHTML(color.key, false, false, cat);
+    const playerMarkup = window.bbV59PickerHTML(color.key, false, true, cat);
+    const hostArea=document.getElementById("hostPickerArea"); if(hostArea) hostArea.innerHTML=hostMarkup;
+    if(typeof hbHostPickerPopupShowV7I === "function") hbHostPickerPopupShowV7I(hostMarkup);
+
+    db.ref("rooms/"+room+"/currentRound").set({
+      id:currentRoundId,
+      status:"picking",
+      pickerMode:"bb-aap-zak",
+      animal:"bb-aap",
+      animalKey:"bb-aap",
+      animalName:"BB-aap",
+      targetColorKey:color.key,
+      colorKey:color.key,
+      colorName:color.name,
+      colorEmoji:color.emoji,
+      category:cat,
+      pickerMarkup:playerMarkup,
+      pickerStartedAt:firebase.database.ServerValue.TIMESTAMP,
+      seconds:Number(document.getElementById("duration")?.value)||20
+    });
+
+    setTimeout(()=>{
+      if(typeof flash === "function") flash();
+      const resultMarkup = window.bbV59PickerHTML(color.key, true, false, cat);
+      if(hostArea) hostArea.innerHTML=resultMarkup;
+      if(typeof hbHostPickerPopupShowV7I === "function") hbHostPickerPopupShowV7I(resultMarkup);
+      db.ref("rooms/"+room+"/currentRound").set({
+        id:currentRoundId,
+        status:"ready",
+        pickerMode:"bb-aap-zak",
+        animal:"bb-aap",
+        animalKey:"bb-aap",
+        animalName:"BB-aap",
+        targetColorKey:color.key,
+        colorKey:color.key,
+        colorName:color.name,
+        colorEmoji:color.emoji,
+        category:cat,
+        pickerMarkup:window.bbV59PickerHTML(color.key, true, true, cat),
+        seconds:Number(document.getElementById("duration")?.value)||20
+      });
+      if(playBtn) playBtn.disabled=false;
+      if(showAnswerBtn) showAnswerBtn.disabled=false;
+      const score=document.getElementById("hostScorePanel"); if(score) score.classList.remove("hidden");
+      const st=document.getElementById("hostStatus"); if(st) st.textContent="Kleur bekend. Klik nu op Speel verborgen nummer.";
+      if(typeof hbHostPickerPopupHideV7I === "function") setTimeout(hbHostPickerPopupHideV7I,3000);
+    },5000);
+  };
+
+  function addBranding(){
+    const lic=document.querySelector(".licenseCard");
+    if(lic && !lic.querySelector(".bbLogoHero")) lic.insertAdjacentHTML("afterbegin",`<img src="${BB_LOGO}" class="bbLogoHero" alt="Bingo Beats logo">`);
+    const head=document.getElementById("mainHeader");
+    if(head && !head.querySelector(".bbLogoHeader")) head.insertAdjacentHTML("afterbegin",`<img src="${BB_LOGO}" class="bbLogoHeader" alt="Bingo Beats logo">`);
+  }
+  function cleanOldPickers(){
+    ["hostPickerArea","dashPickerArea","playerPickerArea"].forEach(id=>{
+      const el=document.getElementById(id); if(!el) return;
+      const h=el.innerHTML||"";
+      if((h.includes("🪩") || h.includes("Discobal") || h.includes("Kleurenmixer") || h.includes("Rad") || h.includes("Vos") || h.includes("Dier")) && !h.includes("data-bb-v59")){
+        el.innerHTML=window.bbV59PickerHTML("yellow",false,id!=="hostPickerArea","");
+      }
+    });
+  }
+  addBranding();
+  setTimeout(addBranding,400);
+  setTimeout(cleanOldPickers,900);
+  setInterval(cleanOldPickers,2000);
+})();
