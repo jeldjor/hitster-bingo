@@ -2846,3 +2846,6 @@ button[onclick*="sound"],button[onclick*="Sound"],button[onclick*="audio"],butto
 .licenseSuccess {
   color: #7ed957;
 }
+.hidden {
+  display: none !important;
+}
