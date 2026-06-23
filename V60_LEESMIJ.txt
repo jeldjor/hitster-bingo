@@ -1,0 +1,22 @@
+Bingo Beats V60
+
+In deze versie zitten de BB-aap animaties verwerkt:
+
+1. Categoriekiezer
+- Bij Start ronde trekt de BB-aap blind een gekleurde bal uit een zak.
+- Host en spelers zien dezelfde stijl/animatie.
+- Geen discobal/rad als hoofdanimatie.
+
+2. Goed antwoord
+- Als de host het antwoord goedkeurt, krijgt de speler een grote bingokaart.
+- De BB-aap verschijnt vrolijk.
+- De speler kan alleen een vakje kiezen met de kleur van de actieve categorie.
+- Daarna gaat het scherm terug naar normaal.
+
+3. Fout antwoord
+- Als de host het antwoord afkeurt, krijgt de speler de grote bingokaart te zien.
+- De BB-aap loopt nee-schuddend door het scherm.
+- Daarna gaat het scherm terug naar normaal.
+
+4. Logo
+- Het BB-logo zit in assets/ en wordt op meerdere plekken gebruikt.

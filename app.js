@@ -5286,3 +5286,27 @@ document.addEventListener("click", function(e){
   setTimeout(cleanOldPickers,900);
   setInterval(cleanOldPickers,2000);
 })();
+
+/* ==================================================
+   V60 BB-aap animaties compleet
+   - Categoriekiezer: BB-aap trekt bal uit zak
+   - Goed antwoord: grote bingokaart + vrolijke BB-aap
+   - Fout antwoord: grote bingokaart + BB-aap loopt nee-schuddend
+   Deze laag is bewust als laatste geladen zodat host en speler dezelfde animatie gebruiken.
+   ================================================== */
+(function(){
+  // Extra veiligheidslaag: als oude teksten/emoji's nog in de picker verschijnen, forceer BB-aap picker opnieuw.
+  function forceBbPickerLabels(){
+    const host = document.getElementById('hostPickerArea');
+    const dash = document.getElementById('dashPickerArea');
+    [host, dash].forEach(el => {
+      if(!el) return;
+      const html = el.innerHTML || '';
+      if((html.includes('Discobal') || html.includes('Kleurenmixer') || html.includes('🪩')) && !html.includes('data-bb-v59')){
+        if(typeof bbV59PickerHTML === 'function') el.innerHTML = bbV59PickerHTML('yellow', false, el.id !== 'hostPickerArea', '');
+      }
+    });
+  }
+  setTimeout(forceBbPickerLabels, 500);
+  setTimeout(forceBbPickerLabels, 1500);
+})();

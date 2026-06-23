@@ -3156,3 +3156,88 @@ button[onclick*="sound"],button[onclick*="Sound"],button[onclick*="audio"],butto
 @keyframes bbV59FlexMascot{0%,100%{transform:translateY(0) scale(1)}45%{transform:translateY(-10px) scale(1.06)}70%{transform:translateY(-4px) scale(1.02)}}
 @keyframes bbV59NoWalk{0%{transform:translateX(-55vw) rotate(-2deg);opacity:0}15%{opacity:1}45%{transform:translateX(0) rotate(4deg)}65%{transform:translateX(0) rotate(-4deg)}82%{transform:translateX(0) rotate(4deg)}100%{transform:translateX(55vw) rotate(-2deg);opacity:0}}
 @media(max-width:640px){.bbLogoHero{width:170px}.bbLogoHeader{width:58px;height:58px}.bbV59Stage{min-height:220px}.bbV59Mascot{width:108px}.bbV59ColorName{font-size:26px}.bbV59Category{font-size:16px}.bbV59BigBall{width:64px;height:64px}}
+
+
+/* V59 Logo Fix - strakke BB-logo integratie */
+.bbLogoHero{
+  width: min(260px, 78vw);
+  height: auto;
+  display: block;
+  margin: 0 auto 18px;
+  border-radius: 28px;
+  box-shadow: 0 18px 60px rgba(0,0,0,.45), 0 0 34px rgba(255, 206, 60, .22);
+}
+
+.bbLogoHeader{
+  width: min(150px, 34vw);
+  height: auto;
+  display: block;
+  margin: 4px auto 8px;
+  border-radius: 50%;
+  box-shadow: 0 10px 36px rgba(0,0,0,.35), 0 0 26px rgba(255, 206, 60, .25);
+}
+
+@media (max-width: 520px){
+  .bbLogoHero{
+    width: min(220px, 72vw);
+    margin-bottom: 14px;
+  }
+  .bbLogoHeader{
+    width: 112px;
+    margin-top: 2px;
+    margin-bottom: 6px;
+  }
+}
+
+
+/* V59.1 - Logo op startpopup, nieuw spel popup, bingo win scherm en licentie */
+.bbLogoPopup,
+.bbLogoModal{
+  width:min(190px,58vw);
+  height:auto;
+  display:block;
+  margin:0 auto 16px;
+  border-radius:24px;
+  box-shadow:0 16px 46px rgba(0,0,0,.42),0 0 30px rgba(255,204,51,.22);
+}
+
+.bbLogoBingo{
+  width:min(230px,60vw);
+  height:auto;
+  display:block;
+  margin:0 auto 16px;
+  border-radius:28px;
+  box-shadow:0 18px 60px rgba(0,0,0,.48),0 0 44px rgba(255,204,51,.30);
+  animation:bbLogoBingoPop .75s cubic-bezier(.2,1.35,.35,1) both;
+}
+
+.hbHostStartModal,
+.modalCard{
+  text-align:center;
+}
+
+.modalCard ul{
+  text-align:left;
+}
+
+.licenseCard .bbLogoHero{
+  margin-top:-4px;
+}
+
+@keyframes bbLogoBingoPop{
+  from{transform:scale(.84) rotate(-2deg);opacity:0}
+  to{transform:scale(1) rotate(0);opacity:1}
+}
+
+@media(max-width:520px){
+  .bbLogoPopup,
+  .bbLogoModal{
+    width:min(155px,52vw);
+    margin-bottom:12px;
+    border-radius:20px;
+  }
+  .bbLogoBingo{
+    width:min(180px,56vw);
+    margin-bottom:10px;
+  }
+}
