@@ -1,0 +1,22 @@
+Bingo Beats V63 - goede verschillende logo's
+
+Deze versie bevat nu ECHT verschillende logo-bestanden:
+- bb_logo_gold.png
+- bb_logo_lime.png
+- bb_logo_aqua.png
+- bb_logo_purple.png
+- bb_logo_red.png
+
+De loze zwarte ruimte rondom het originele logo is zo veel mogelijk weggehaald.
+De logo's zijn PNG met transparantie en worden zonder vierkante achtergrond getoond.
+
+Toegepast:
+- Licentie: gold
+- Host/speler header: lime
+- Voor je begint popup: aqua
+- Nieuw spel popup: purple waar aanwezig
+- Winnaar/bingo: gold waar aanwezig
+- Red is meegeleverd voor fout-antwoord animatie/overlay straks
+
+Upload alle bestanden uit deze zip naar je v55-license branch.
+Je mag oude logo-testbestanden verwijderen.
