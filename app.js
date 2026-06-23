@@ -5310,3 +5310,21 @@ document.addEventListener("click", function(e){
   setTimeout(forceBbPickerLabels, 500);
   setTimeout(forceBbPickerLabels, 1500);
 })();
+
+
+function copyRoomLink(){
+  const el = document.getElementById('joinLink');
+  const text = el ? el.value : window.location.href;
+  navigator.clipboard.writeText(text).then(()=>{
+    const b=document.getElementById('copyRoomLinkBtn');
+    if(b){
+      const old=b.textContent;
+      b.textContent='✅ Gekopieerd';
+      setTimeout(()=>b.textContent='📋 Kopieer link',1500);
+    }
+  });
+}
+
+document.addEventListener('click',(e)=>{
+  if(e.target && e.target.id==='copyRoomLinkBtn'){ copyRoomLink(); }
+});
