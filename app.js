@@ -92,7 +92,7 @@ function unlockApp(){
 function wire(){
  $("loginBtn")?.addEventListener("click",login);$("logoutBtn")?.addEventListener("click",logout);$("activateBtn")?.addEventListener("click",activatePlayer);$("csvFile")?.addEventListener("change",handleCsv);$("resetUsedBtn")?.addEventListener("click",()=>{delete localStorage.hb_used;updateStatus()});
  $("newRoomBtn")?.addEventListener("click",createRoom);$("soundBtn")?.addEventListener("click",activateSound);$("startRoundBtn")?.addEventListener("click",startRound);$("playBtn")?.addEventListener("click",playHidden);$("stopBtn")?.addEventListener("click",stopPlayback);$("showAnswerBtn")?.addEventListener("click",showAnswer);$("lockBtn")?.addEventListener("click",lockRound);$("publishBtn")?.addEventListener("click",publishResults);
- $("joinBtn")?.addEventListener("click",joinPlayer);$("readyBtn")?.addEventListener("click",setReady);$("scoreReadyBtn")?.addEventListener("click",setReady);$("submitAnswerBtn")?.addEventListener("click",submitAnswer);
+ $("copyRoomLinkBtn")?.addEventListener("click",copyRoomLink); $("joinBtn")?.addEventListener("click",joinPlayer);$("readyBtn")?.addEventListener("click",setReady);$("scoreReadyBtn")?.addEventListener("click",setReady);$("submitAnswerBtn")?.addEventListener("click",submitAnswer);
  $("hostScoreboard")?.addEventListener("click",scoreboardClick);
 }
 
@@ -117,6 +117,35 @@ async function updateStatus(){if($("csvStatus"))$("csvStatus").textContent=track
 window.onSpotifyWebPlaybackSDKReady=()=>{};
 async function activatePlayer(){let t=await getToken();if(!t){alert("Login eerst.");return}if(!window.Spotify){alert("Spotify speler nog niet geladen.");return}if(player){await player.connect();return}player=new Spotify.Player({name:"Bingo Beats",getOAuthToken:async cb=>cb(await getToken()),volume:.8});player.addListener("ready",({device_id})=>{deviceId=device_id;$("loginStatus").textContent+=" — speler actief."});await player.connect()}
 
+
+function copyRoomLink(){
+  const input = $("joinLink");
+  const btn = $("copyRoomLinkBtn");
+  const link = input?.value || (currentRoomCode ? location.origin + location.pathname + "?room=" + currentRoomCode : "");
+  if(!link){
+    if(btn) btn.textContent = "Geen link";
+    return;
+  }
+  const done = () => {
+    if(btn){
+      const old = btn.textContent;
+      btn.textContent = "✅ Link gekopieerd";
+      setTimeout(() => btn.textContent = "📋 Kopieer link", 1600);
+    }
+  };
+  if(navigator.clipboard?.writeText){
+    navigator.clipboard.writeText(link).then(done).catch(() => {
+      input?.select?.();
+      document.execCommand("copy");
+      done();
+    });
+  }else{
+    input?.select?.();
+    document.execCommand("copy");
+    done();
+  }
+}
+
 // Room/player
 function getCats(){return{yellow:$("cat-yellow").value,pink:$("cat-pink").value,purple:$("cat-purple").value,blue:$("cat-blue").value,green:$("cat-green").value}}
 function roomCode(){let c="",ch="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";for(let i=0;i<4;i++)c+=ch[Math.floor(Math.random()*ch.length)];return c}
@@ -124,7 +153,7 @@ function genCard(){let p=[],cs=["yellow","pink","purple","blue","green"];for(let
 function createRoom(){currentRoomCode=roomCode();db.ref("rooms/"+currentRoomCode).set({createdAt:firebase.database.ServerValue.TIMESTAMP,categories:getCats()}).then(()=>{localStorage.hb_host_room=currentRoomCode;showRoom();listenHost(currentRoomCode);listenBingo(currentRoomCode)})}
 function showRoom(){$("roomBox").classList.remove("hidden");$("roomCodeText").textContent=currentRoomCode;$("joinLink").value=location.origin+location.pathname+"?room="+currentRoomCode}
 function restoreHost(){let room=localStorage.hb_host_room;if(room&&!new URLSearchParams(location.search).get("room")){currentRoomCode=room;showRoom();listenHost(room);listenBingo(room)}}
-function setupPlayerMode(){let room=new URLSearchParams(location.search).get("room");if(!room)return;document.body.classList.add("playerMode");$("modeText").textContent="Speler";$("playerApp").classList.remove("hidden");currentRoomCode=room.toUpperCase();$("playerRoomCode").textContent=currentRoomCode;if(currentPlayerName)$("playerNameInput").value=currentPlayerName}
+function setupPlayerMode(){let room=new URLSearchParams(location.search).get("room");if(!room)return;document.body.classList.add("playerMode");$("modeText").textContent="🎮 Speler";$("playerApp").classList.remove("hidden");currentRoomCode=room.toUpperCase();$("playerRoomCode").textContent=currentRoomCode;if(currentPlayerName)$("playerNameInput").value=currentPlayerName}
 function joinPlayer(){let name=$("playerNameInput").value.trim();if(!name){alert("Vul je naam in.");return}currentPlayerName=name;if(!currentPlayerId)currentPlayerId="p_"+Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);localStorage.hb_player_id=currentPlayerId;localStorage.hb_player_name=name;localStorage.hb_player_room=currentRoomCode;let ref=db.ref("rooms/"+currentRoomCode+"/players/"+currentPlayerId);ref.once("value").then(s=>{let ex=s.val()||{};return ref.update({name,online:true,ready:false,joinedAt:ex.joinedAt||firebase.database.ServerValue.TIMESTAMP,lastSeen:firebase.database.ServerValue.TIMESTAMP,card:ex.card||genCard(),marked:ex.marked||{}})}).then(()=>{ref.child("online").onDisconnect().set(false);listenPlayer();showScreen("screenLobby")})}
 function setReady(){if(!currentPlayerId)return;db.ref("rooms/"+currentRoomCode+"/players/"+currentPlayerId+"/ready").set(true)}
 function showScreen(id){document.querySelectorAll("#playerApp .screen").forEach(s=>s.classList.add("hidden"));$(id)?.classList.remove("hidden")}
@@ -137,34 +166,19 @@ function hostReadyState(room){let r=room.currentRound||{},btn=$("startRoundBtn")
 
 // Round host
 function flash(){let f=document.createElement("div");f.className="flash";document.body.appendChild(f);setTimeout(()=>f.remove(),700)}
-function pickerHTML(mode){return mode==="wheel"?`<div class="bbOldPickerRemoved"><div class="pointer"></div><div class="bbOldPickerRemoved"></div></div><div class="pickerTitle">Kleurenmixer start...</div>`:`<div class="bbOldPickerRemoved">🪩</div><div class="pickerTitle">Kleurenmixer start...</div>`}
-function startRound(){let room=currentRoomCode;if(!room){alert("Maak eerst kamer.");return}db.ref("rooms/"+room).once("value").then(s=>{let data=s.val()||{};if(!allReady(data)){alert("Nog niet iedereen is READY.");return}currentTrack=chooseTrack();if(!currentTrack){alert("Upload eerst CSV.");return}let up={};Object.keys(data.players||{}).forEach(pid=>up["rooms/"+room+"/players/"+pid+"/ready"]=false);db.ref().update(up).then(()=>startRoundVisual(room))})}
-function startRoundVisual(room){
-  $("hostAnswerArea").innerHTML="";
-  $("playBtn").disabled=true;
-  $("showAnswerBtn").disabled=true;
-  const mode=Math.random()<.5?"disco":"wheel";
-  $("hostPickerArea").innerHTML=pickerHTML(mode);
-  currentRoundId="r_"+Date.now();
-
-  db.ref("rooms/"+room+"/currentRound").set({
-    id:currentRoundId,
-    status:"picking",
-    pickerMode:mode,
-    seconds:Number($("duration").value)||20,
-    createdAt:firebase.database.ServerValue.TIMESTAMP
-  });
-
-  setTimeout(()=>{
-    flash();
-    let color=pick(COLORS),cat=$(color.input).value||"Geen categorie";
-    $("hostPickerArea").innerHTML=`<div class="colorDisplay">${color.emoji}<br>${color.name}</div><div class="categoryDisplay">${esc(cat)}</div>`;
-    let round={id:currentRoundId,status:"ready",pickerMode:mode,colorKey:color.key,colorName:color.name,colorEmoji:color.emoji,category:cat,seconds:Number($("duration").value)||20};
-    db.ref("rooms/"+room+"/currentRound").set(round);
-    $("playBtn").disabled=false;
-    $("showAnswerBtn").disabled=false;
-    $("hostScorePanel").classList.remove("hidden");
-  },2600);
+function pickerHTML(mode){
+  return `<div class="bbPickerCard">
+    <div class="bbPickerLogoMini"><img src="bb_logo_purple.png" alt="Bingo Beats"></div>
+    <div class="bbPickerTitle">🐵 BB-aap kiest een kleur...</div>
+    <div class="bbColorMixer">
+      <span style="--c:#FFCC33"></span>
+      <span style="--c:#00D4C7"></span>
+      <span style="--c:#FF8A1F"></span>
+      <span style="--c:#7ED957"></span>
+      <span style="--c:#FF5A5F"></span>
+    </div>
+    <div class="bbPickerStatus">Nog even spannend...</div>
+  </div>`;
 }
 async function playHidden(){if(!currentTrack)return;$("playBtn").disabled=true;if(!deviceId){await activatePlayer();await new Promise(r=>setTimeout(r,1200))}if(!deviceId){alert("Geen Spotify-speler actief.");$("playBtn").disabled=false;return}let dur=(Number($("duration").value)||20)*1000,pos=0;if($("randomStart").checked&&currentTrack.duration_ms>dur+40000){let max=Math.max(0,currentTrack.duration_ms-dur-5000);pos=Math.floor(20000+Math.random()*Math.max(1,max-20000))}await api(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,{method:"PUT",body:JSON.stringify({uris:[currentTrack.uri],position_ms:pos})});let deadline=Date.now()+dur;await db.ref("rooms/"+currentRoomCode+"/currentRound").update({status:"answering",deadlineMs:deadline});$("stopBtn").disabled=false;clearTimeout(lockTimer);lockTimer=setTimeout(lockRound,dur);clearTimeout(stopTimer);stopTimer=setTimeout(stopPlayback,dur)}
 async function stopPlayback(){try{await api("https://api.spotify.com/v1/me/player/pause",{method:"PUT",body:"{}"})}catch(e){}$("stopBtn").disabled=true}
@@ -226,9 +240,11 @@ function hbRenderRoomBoxV7B(code){
         <div style="font-size:12px;opacity:.75;font-weight:900;margin-bottom:5px">SPELCODE</div>
         <div style="font-size:42px;font-weight:900;color:#7ED957;letter-spacing:3px;line-height:1">${esc(code)}</div>
         <div style="width:100%;margin-top:10px;padding:8px 9px;border-radius:10px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.14);font-size:11px;word-break:break-all">${esc(link)}</div>
+        <button id="copyRoomLinkBtn" type="button" class="copyRoomLinkBtn" style="margin-top:8px">📋 Kopieer link</button>
       </div>
       <img alt="QR code" src="${hbQrV7B(link)}" style="width:126px;height:126px;background:white;border-radius:12px;padding:6px">
     </div>`;
+  setTimeout(()=>{$("copyRoomLinkBtn")?.addEventListener("click",copyRoomLink)},0);
 }
 function hbResumeRoomV7B(code){
   if(!code) return;
@@ -342,7 +358,7 @@ function sharedPickerHTML(mode){
   }
 
   return `<div class="playerPickerBig">
-    <div class="bbOldPickerRemoved">🪩</div>
+    <div class="bbOldPickerRemoved">🎮</div>
     <div class="pickerTitle">Kleurenmixer start...</div>
   </div>`;
 }
@@ -1374,7 +1390,7 @@ function renderCompactAnswer(room, r){
   }
 
   if(r.status === "picking"){
-    block.innerHTML = `<div class="answerSubmitted"><h3>🪩 Kleurkiezer</h3><p>De host kiest een kleur...</p></div>`;
+    block.innerHTML = `<div class="answerSubmitted"><h3>🎮 Kleurkiezer</h3><p>De host kiest een kleur...</p></div>`;
     return;
   }
 
@@ -1490,7 +1506,7 @@ function renderCompactPicker(r){
   if(!area) return;
 
   if(!r || !r.id){
-    area.innerHTML = `<div class="bbOldPickerRemoved">🪩</div><div class="dashCatText">Wachten op host</div>`;
+    area.innerHTML = `<div class="bbOldPickerRemoved">🎮</div><div class="dashCatText">Wachten op host</div>`;
     return;
   }
 
@@ -1498,13 +1514,13 @@ function renderCompactPicker(r){
     if(r.pickerMode === "wheel"){
       area.innerHTML = `<div class="bbOldPickerRemoved"></div><div class="dashCatText">Kleurenmixer start...</div>`;
     }else{
-      area.innerHTML = `<div class="bbOldPickerRemoved">🪩</div><div class="dashCatText">Kleurenmixer start...</div>`;
+      area.innerHTML = `<div class="bbOldPickerRemoved">🎮</div><div class="dashCatText">Kleurenmixer start...</div>`;
     }
     return;
   }
 
   area.innerHTML =
-    `<div class="dashColorBig">${esc(r.colorEmoji || "🪩")}</div>
+    `<div class="dashColorBig">${esc(r.colorEmoji || "🎮")}</div>
      <div class="dashColorText">${esc(r.colorName || "KLEUR")}</div>
      <div class="dashCatText">${esc(r.category || "Wachten...")}</div>`;
 }
@@ -1849,7 +1865,7 @@ function hbRenderAnswer(room,r){
   }
 
   if(r.status === "picking"){
-    block.innerHTML = `<div class="answerSubmitted"><h3>🪩 Kleurkiezer</h3><p>De host kiest een kleur...</p></div>`;
+    block.innerHTML = `<div class="answerSubmitted"><h3>🎮 Kleurkiezer</h3><p>De host kiest een kleur...</p></div>`;
     return;
   }
 
@@ -1940,7 +1956,7 @@ function hbRenderPicker(r){
   if(!area) return;
 
   if(!r || !r.id){
-    area.innerHTML = `<div class="bbOldPickerRemoved">🪩</div><div class="dashCatText">Wachten op host...</div>`;
+    area.innerHTML = `<div class="bbOldPickerRemoved">🎮</div><div class="dashCatText">Wachten op host...</div>`;
     return;
   }
 
@@ -1948,12 +1964,12 @@ function hbRenderPicker(r){
     if(r.pickerMode === "wheel"){
       area.innerHTML = `<div class="bbOldPickerRemoved"></div><div class="dashCatText">Kleurenmixer start...</div>`;
     }else{
-      area.innerHTML = `<div class="bbOldPickerRemoved">🪩</div><div class="dashCatText">Kleurenmixer start...</div>`;
+      area.innerHTML = `<div class="bbOldPickerRemoved">🎮</div><div class="dashCatText">Kleurenmixer start...</div>`;
     }
     return;
   }
 
-  area.innerHTML = `<div class="dashColorBig">${esc(r.colorEmoji || "🪩")}</div>
+  area.innerHTML = `<div class="dashColorBig">${esc(r.colorEmoji || "🎮")}</div>
     <div class="dashColorText">${esc(r.colorName || "KLEUR")}</div>
     <div class="dashCatText">${esc(r.category || "Wachten...")}</div>`;
 }
@@ -2716,7 +2732,7 @@ function cleanHostOpeningState(){
   if(hostBingoPanel) hostBingoPanel.classList.add("hidden");
 
   const picker = document.getElementById("hostPickerArea") || document.getElementById("pickerArea");
-  if(picker) picker.innerHTML = "🪩<br>Klaar om te spelen";
+  if(picker) picker.innerHTML = "🎮<br>Klaar om te spelen";
 
   const status = document.getElementById("hostStatus");
   if(status) status.textContent = "Maak een nieuwe kamer om te starten.";
@@ -3241,7 +3257,7 @@ function hbHostPickerPopupHideV7I(){
 function hbHostPickerPopupPickingV7I(mode){
   const inner = typeof sharedPickerHTML === "function"
     ? sharedPickerHTML(mode)
-    : (typeof pickerHTML === "function" ? pickerHTML(mode) : `<div class="bbOldPickerRemoved">🪩</div><div class="pickerTitle">Kleurenmixer start...</div>`);
+    : (typeof pickerHTML === "function" ? pickerHTML(mode) : `<div class="bbOldPickerRemoved">🎮</div><div class="pickerTitle">Kleurenmixer start...</div>`);
 
   hbHostPickerPopupShowV7I(`
     <div class="hostPickerPopupTitle">Kleurkiezer draait...</div>
@@ -3328,7 +3344,7 @@ const HB_SHOW_ANIMS_V8 = ["disco","wheel","vinyl","box","dart","penalty","slot",
 
 function hbAnimLabelV8(mode){
   return {
-    disco:"🪩 Discobal", wheel:"🎡 Kleurenrad", vinyl:"💿 Vinyl Picker",
+    disco:"🎮 Discobal", wheel:"🎡 Kleurenrad", vinyl:"💿 Vinyl Picker",
     box:"🎁 Mystery Box", dart:"🎯 Dartbord", penalty:"⚽ Strafschop",
     slot:"🎰 Slotmachine", dice:"🎲 Dobbelsteen", mic:"🎤 Microfoon Toss"
   }[mode] || "🎉 Showmoment";
@@ -3348,7 +3364,7 @@ function hbShowAnimHTMLV8(mode){
   if(mode==="slot") return `<div class="showAnimStage"><div class="hostPickerPopupTitle">${hbAnimLabelV8(mode)}</div><div class="slotMachine"><div class="slotReel">🟨</div><div class="slotReel">🟪</div><div class="slotReel">🟩</div></div><div class="showAnimSub">De rollen draaien...</div></div>`;
   if(mode==="dice") return `<div class="showAnimStage"><div class="hostPickerPopupTitle">${hbAnimLabelV8(mode)}</div><div class="showDice">🎲</div><div class="showAnimTitle">Rollen maar...</div></div>`;
   if(mode==="mic") return `<div class="showAnimStage"><div class="hostPickerPopupTitle">${hbAnimLabelV8(mode)}</div><div class="showMic">🎤</div><div class="showAnimTitle">Microfoon toss...</div></div>`;
-  return `<div class="showAnimStage"><div class="hostPickerPopupTitle">${hbAnimLabelV8("disco")}</div><div class="showAnimBig">🪩</div><div class="showAnimTitle">Kleurenmixer start...</div></div>`;
+  return `<div class="showAnimStage"><div class="hostPickerPopupTitle">${hbAnimLabelV8("disco")}</div><div class="showAnimBig">🎮</div><div class="showAnimTitle">Kleurenmixer start...</div></div>`;
 }
 
 function hbHostPickerPopupPickingV8(mode){
@@ -3414,7 +3430,7 @@ const HB_SHOW_ANIMS_V8C = ["disco","wheel","vinyl","box","dart","penalty","slot"
 
 function hbAnimLabelV8C(mode){
   return {
-    disco:"🪩 Discobal",
+    disco:"🎮 Discobal",
     wheel:"🎡 Kleurenrad",
     vinyl:"💿 Vinyl Picker",
     box:"🎁 Mystery Box",
@@ -3442,7 +3458,7 @@ function hbShowAnimHTMLV8C(mode, compact=false){
   if(mode==="slot") return `${wrapStart}<div class="hostPickerPopupTitle">${hbAnimLabelV8C(mode)}</div><div class="slotMachine"><div class="slotReel">🟨</div><div class="slotReel">🟪</div><div class="slotReel">🟩</div></div><div class="showAnimSub">De rollen draaien...</div>${wrapEnd}`;
   if(mode==="dice") return `${wrapStart}<div class="hostPickerPopupTitle">${hbAnimLabelV8C(mode)}</div><div class="showDice">🎲</div><div class="showAnimTitle">Rollen maar...</div>${wrapEnd}`;
   if(mode==="mic") return `${wrapStart}<div class="hostPickerPopupTitle">${hbAnimLabelV8C(mode)}</div><div class="showMic">🎤</div><div class="showAnimTitle">Microfoon toss...</div>${wrapEnd}`;
-  return `${wrapStart}<div class="hostPickerPopupTitle">${hbAnimLabelV8C("disco")}</div><div class="showDiscoBall">🪩</div><div class="showAnimTitle">Kleurenmixer start...</div>${wrapEnd}`;
+  return `${wrapStart}<div class="hostPickerPopupTitle">${hbAnimLabelV8C("disco")}</div><div class="showDiscoBall">🎮</div><div class="showAnimTitle">Kleurenmixer start...</div>${wrapEnd}`;
 }
 
 function hbHostPickerPopupPickingV8C(mode){
@@ -3476,7 +3492,7 @@ if(typeof renderCompactPicker === "function"){
     if(!area) return;
 
     if(!r || !r.id){
-      area.innerHTML = `<div class="bbOldPickerRemoved">🪩</div><div class="dashCatText">Wachten op host...</div>`;
+      area.innerHTML = `<div class="bbOldPickerRemoved">🎮</div><div class="dashCatText">Wachten op host...</div>`;
       return;
     }
 
@@ -3486,7 +3502,7 @@ if(typeof renderCompactPicker === "function"){
     }
 
     area.innerHTML =
-      `<div class="dashColorBig">${esc(r.colorEmoji || "🪩")}</div>
+      `<div class="dashColorBig">${esc(r.colorEmoji || "🎮")}</div>
        <div class="dashColorText">${esc(r.colorName || "KLEUR")}</div>
        <div class="dashCatText">${esc(r.category || "Wachten...")}</div>`;
   };
@@ -3702,7 +3718,7 @@ const HB_ANIMS_V9C = ["disco","wheel","vinyl","box","dart","penalty","slot","dic
 
 function hbAnimLabelV9C(mode){
   return {
-    disco:"🪩 Discobal",wheel:"🎡 Kleurenrad",vinyl:"💿 Vinyl Picker",
+    disco:"🎮 Discobal",wheel:"🎡 Kleurenrad",vinyl:"💿 Vinyl Picker",
     box:"🎁 Mystery Box",dart:"🎯 Dartbord",penalty:"⚽ Strafschop",
     slot:"🎰 Slotmachine",dice:"🎲 Dobbelsteen",mic:"🎤 Microfoon Toss"
   }[mode] || "🎉 Showmoment";
@@ -3731,7 +3747,7 @@ function hbAnimHTMLV9C(mode, compact=false){
   if(mode==="slot") return `<div class="${wrap}"><div class="hostPickerPopupTitle">${hbAnimLabelV9C(mode)}</div><div class="slotMachine"><div class="slotReel">🟨</div><div class="slotReel">🟪</div><div class="slotReel">🟩</div></div><div class="showAnimSub">De rollen draaien...</div></div>`;
   if(mode==="dice") return `<div class="${wrap}"><div class="hostPickerPopupTitle">${hbAnimLabelV9C(mode)}</div><div class="showDice">🎲</div><div class="showAnimTitle">Rollen maar...</div></div>`;
   if(mode==="mic") return `<div class="${wrap}"><div class="hostPickerPopupTitle">${hbAnimLabelV9C(mode)}</div><div class="showMic">🎤</div><div class="showAnimTitle">Microfoon toss...</div></div>`;
-  return `<div class="${wrap}"><div class="hostPickerPopupTitle">${hbAnimLabelV9C("disco")}</div><div class="showDiscoBall">🪩</div><div class="showAnimTitle">Kleurenmixer start...</div></div>`;
+  return `<div class="${wrap}"><div class="hostPickerPopupTitle">${hbAnimLabelV9C("disco")}</div><div class="showDiscoBall">🎮</div><div class="showAnimTitle">Kleurenmixer start...</div></div>`;
 }
 
 function hbShowHostPopupV9C(html){
@@ -3756,9 +3772,9 @@ if(typeof renderCompactPicker === "function"){
   renderCompactPicker = function(r){
     const area=document.getElementById("dashPickerArea");
     if(!area)return;
-    if(!r||!r.id){area.innerHTML=`<div class="bbOldPickerRemoved">🪩</div><div class="dashCatText">Wachten op host...</div>`;return;}
+    if(!r||!r.id){area.innerHTML=`<div class="bbOldPickerRemoved">🎮</div><div class="dashCatText">Wachten op host...</div>`;return;}
     if(r.status==="picking"){area.innerHTML=hbAnimHTMLV9C(r.pickerMode||"disco",true);return;}
-    area.innerHTML=`<div class="dashColorBig">${esc(r.colorEmoji||"🪩")}</div><div class="dashColorText">${esc(r.colorName||"KLEUR")}</div><div class="dashCatText">${esc(r.category||"Wachten...")}</div>`;
+    area.innerHTML=`<div class="dashColorBig">${esc(r.colorEmoji||"🎮")}</div><div class="dashColorText">${esc(r.colorName||"KLEUR")}</div><div class="dashCatText">${esc(r.category||"Wachten...")}</div>`;
   };
 }
 
@@ -3884,7 +3900,7 @@ showWinner = function(name){
       const input=document.getElementById(id), label=input?.closest("label");
       if(label){label.setAttribute("data-bb-label",text);[...label.childNodes].forEach(n=>{if(n.nodeType===Node.TEXT_NODE&&n.textContent.trim())n.textContent=text})}
     });
-    const h=document.querySelector("header h1"); if(h)h.textContent="🪩 Bingo Beats";
+    const h=document.querySelector("header h1"); if(h)h.textContent="🎮 Bingo Beats";
     document.title="Bingo Beats";
   }
   setTimeout(applyLabels,100);setTimeout(applyLabels,800);setInterval(applyLabels,2000);
@@ -4889,7 +4905,7 @@ function bbResetHostRoundUi(){
   if(bingoOverlay) bingoOverlay.classList.add("hidden");
 
   const picker = document.getElementById("hostPickerArea");
-  if(picker) picker.innerHTML = "🪩<br>Klaar om te spelen";
+  if(picker) picker.innerHTML = "🎮<br>Klaar om te spelen";
 
   const answer = document.getElementById("hostAnswerArea");
   if(answer) answer.innerHTML = "";
@@ -5276,7 +5292,7 @@ document.addEventListener("click", function(e){
     ["hostPickerArea","dashPickerArea","playerPickerArea"].forEach(id=>{
       const el=document.getElementById(id); if(!el) return;
       const h=el.innerHTML||"";
-      if((h.includes("🪩") || h.includes("Discobal") || h.includes("Kleurenmixer") || h.includes("Rad") || h.includes("Vos") || h.includes("Dier")) && !h.includes("data-bb-v59")){
+      if((h.includes("🎮") || h.includes("Discobal") || h.includes("Kleurenmixer") || h.includes("Rad") || h.includes("Vos") || h.includes("Dier")) && !h.includes("data-bb-v59")){
         el.innerHTML=window.bbV59PickerHTML("yellow",false,id!=="hostPickerArea","");
       }
     });
@@ -5302,7 +5318,7 @@ document.addEventListener("click", function(e){
     [host, dash].forEach(el => {
       if(!el) return;
       const html = el.innerHTML || '';
-      if((html.includes('Discobal') || html.includes('Kleurenmixer') || html.includes('🪩')) && !html.includes('data-bb-v59')){
+      if((html.includes('Discobal') || html.includes('Kleurenmixer') || html.includes('🎮')) && !html.includes('data-bb-v59')){
         if(typeof bbV59PickerHTML === 'function') el.innerHTML = bbV59PickerHTML('yellow', false, el.id !== 'hostPickerArea', '');
       }
     });

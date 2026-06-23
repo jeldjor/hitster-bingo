@@ -14,7 +14,7 @@
   <section id="licenseScreen" class="licenseScreen">
     <div class="licenseCard">
       <img src="bb_logo_gold.png" class="bbLogoHero bbLogoGold" alt="Bingo Beats">
-      <h1>🪩 Bingo Beats</h1>
+      <h1 class="brandTextHidden" aria-hidden="true"></h1>
       <h2>Licentie activeren</h2>
       <p class="small">Voer je licentiecode in om verder te gaan.</p>
       <input id="licenseInput" placeholder="Bijv. TEST-2026" autocomplete="off">
@@ -25,8 +25,8 @@
 
   <header id="mainHeader" class="hidden">
     <img src="bb_logo_lime.png" class="bbLogoHeader bbLogoLime" alt="Bingo Beats">
-    <h1>🪩 Bingo Beats</h1>
-    <p id="modeText">Host</p>
+    <h1 class="brandTextHidden" aria-hidden="true"></h1>
+    <p id="modeText" class="modeBadge">🎤 Host</p>
   </header>
 
   <main id="hostApp" class="hidden">
@@ -70,6 +70,7 @@
       <div id="roomBox" class="box hidden">
         <h3>Spelcode: <span id="roomCodeText"></span></h3>
         <input id="joinLink" readonly>
+        <button id="copyRoomLinkBtn" type="button" class="copyRoomLinkBtn">📋 Kopieer link</button>
       </div>
 
       <h3>Spelers</h3>
@@ -95,7 +96,7 @@
 
     <section class="panel stage">
       <button id="startRoundBtn">🎲 START RONDE</button>
-      <div id="hostPickerArea" class="pickerIntro">🪩<br>Klaar om te spelen</div>
+      <div id="hostPickerArea" class="pickerIntro">🎮<br>Klaar om te spelen</div>
       <button id="playBtn" disabled>🎵 Speel verborgen nummer</button>
       <button id="stopBtn" disabled class="secondary">⏹ Stop</button>
       <button id="showAnswerBtn" disabled>🐵 Toon antwoord</button>
@@ -151,7 +152,7 @@
         </section>
 
         <section class="dashPanel pickerPanel">
-          <div class="panelTitle">🪩 KLEUR & CATEGORIE</div>
+          <div class="panelTitle">🎨 KLEUR & CATEGORIE</div>
           <div id="dashPickerArea" class="dashPicker">Wachten op host...</div>
         </section>
       </div>
