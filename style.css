@@ -3241,3 +3241,58 @@ button[onclick*="sound"],button[onclick*="Sound"],button[onclick*="audio"],butto
     margin-bottom:10px;
   }
 }
+
+
+/* =========================
+   V60.1 LOGO FIX - root bestanden
+   Logo's staan naast index.html:
+   bb_logo.png
+   bb_mascot_dj.png
+   bingo_beats_logo.png
+   ========================= */
+
+.bbLogoHero,
+.bbLogoHeader,
+.bbLogoPopup,
+.bbModalLogo,
+.bbWinnerLogo{
+  object-fit: cover;
+  display: block;
+  background: rgba(0,0,0,.18);
+  border: 1px solid rgba(255,204,51,.28);
+}
+
+.bbLogoHero{
+  width: min(280px, 78vw);
+  height: auto;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto 18px;
+  border-radius: 28px;
+  box-shadow: 0 18px 60px rgba(0,0,0,.45), 0 0 34px rgba(255,204,51,.24);
+}
+
+.bbLogoHeader{
+  width: min(132px, 34vw);
+  height: auto;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  box-shadow: 0 10px 36px rgba(0,0,0,.38), 0 0 26px rgba(255,204,51,.28);
+}
+
+.bbLogoPopup,
+.bbModalLogo,
+.bbWinnerLogo{
+  width: min(230px, 70vw);
+  height: auto;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto 18px;
+  border-radius: 28px;
+  box-shadow: 0 18px 55px rgba(0,0,0,.42), 0 0 32px rgba(255,204,51,.22);
+}
+
+@media(max-width:520px){
+  .bbLogoHero{width:min(220px,72vw);border-radius:24px}
+  .bbLogoHeader{width:112px}
+  .bbLogoPopup,.bbModalLogo,.bbWinnerLogo{width:min(190px,66vw);border-radius:24px}
+}
