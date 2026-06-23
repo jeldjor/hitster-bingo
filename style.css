@@ -3492,3 +3492,7 @@ body:not(.playerMode) .bbLogoHeader{
   .bbLogoHeader{width:112px !important;}
   .bbLogoPopup,.bbLogoModal,.bbLogoBingo{width:190px !important;}
 }
+
+
+/* V66 remove logo glow */
+.bbLogoLime,.bbLogoGold,.bbLogoAqua,.bbLogoPurple,.bbLogoRed{filter:none !important;box-shadow:none !important;}
