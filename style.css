@@ -3568,3 +3568,107 @@ body:not(.playerMode) .bbLogoHeader{
 .wheelWrap{
   display:none !important;
 }
+
+
+/* =========================
+   V72 CLEAN UI
+   ========================= */
+#modeText{
+  display:inline-block !important;
+  padding:7px 18px !important;
+  border-radius:999px !important;
+  border:1px solid rgba(0,212,199,.28) !important;
+  color:#00D4C7 !important;
+  font-weight:900 !important;
+  margin:2px auto 0 !important;
+}
+.copyRoomLinkBtn{
+  width:100% !important;
+  margin-top:8px !important;
+  padding:9px 10px !important;
+  border-radius:12px !important;
+  font-size:13px !important;
+  font-weight:900 !important;
+  background:linear-gradient(135deg,#00D4C7,#7ED957) !important;
+  color:#06130f !important;
+}
+.discoIcon,
+.wheel,
+.wheelWrap,
+.bbOldPickerRemoved{
+  display:none !important;
+}
+.bbPickerV72{
+  width:min(520px,94%);
+  min-height:230px;
+  margin:0 auto;
+  padding:18px;
+  border-radius:28px;
+  background:linear-gradient(145deg,rgba(255,255,255,.10),rgba(255,255,255,.035));
+  border:1px solid rgba(255,255,255,.16);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+}
+.bbPickerLogoV72{
+  width:92px;
+  height:auto;
+  display:block;
+}
+.bbPickerTitleV72{
+  color:#FFCC33;
+  font-size:22px;
+  font-weight:900;
+  text-align:center;
+}
+.bbPickerDotsV72{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:9px;
+  width:min(380px,100%);
+}
+.bbPickerDotsV72 span{
+  display:block;
+  aspect-ratio:1.35/1;
+  border-radius:17px;
+  background:var(--c);
+  box-shadow:0 0 14px var(--c);
+  animation:bbPulseV72 1s ease-in-out infinite alternate;
+}
+.bbPickerDotsV72 span:nth-child(2){animation-delay:.1s}
+.bbPickerDotsV72 span:nth-child(3){animation-delay:.2s}
+.bbPickerDotsV72 span:nth-child(4){animation-delay:.3s}
+.bbPickerDotsV72 span:nth-child(5){animation-delay:.4s}
+@keyframes bbPulseV72{
+  from{transform:translateY(0) scale(.96)}
+  to{transform:translateY(-7px) scale(1.04)}
+}
+.bbPickerSmallV72{
+  font-size:14px;
+  font-weight:900;
+  opacity:.9;
+}
+.bbPickedV72{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
+  padding:16px;
+}
+.bbPickedBallV72{
+  width:74px;
+  height:74px;
+  border-radius:50%;
+}
+.bbPickedNameV72{
+  font-size:26px;
+  font-weight:900;
+  color:#fff;
+}
+.bbPickedCatV72{
+  color:#FFCC33;
+  font-weight:900;
+  text-align:center;
+}
