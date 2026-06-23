@@ -3296,3 +3296,117 @@ button[onclick*="sound"],button[onclick*="Sound"],button[onclick*="audio"],butto
   .bbLogoHeader{width:112px}
   .bbLogoPopup,.bbModalLogo,.bbWinnerLogo{width:min(190px,66vw);border-radius:24px}
 }
+
+
+/* ==================================================
+   V61 BRANDING - logo vibes per scherm
+   Eén merk, verschillende glow-kleuren per context.
+   Bestanden staan in root:
+   bb_logo.png
+   ================================================== */
+
+.bbLogoHero,
+.bbLogoHeader,
+.bbLogoPopup,
+.bbModalLogo,
+.bbWinnerLogo{
+  display:block;
+  object-fit:cover;
+  border-radius:50%;
+  background:transparent!important;
+  border:0!important;
+  overflow:hidden;
+}
+
+/* standaard vorm */
+.bbLogoHero{
+  width:min(260px,74vw);
+  height:min(260px,74vw);
+  margin:0 auto 18px;
+}
+
+.bbLogoHeader{
+  width:min(126px,32vw);
+  height:min(126px,32vw);
+  margin:0 auto 10px;
+}
+
+.bbLogoPopup,
+.bbModalLogo,
+.bbWinnerLogo{
+  width:min(210px,66vw);
+  height:min(210px,66vw);
+  margin:0 auto 18px;
+}
+
+/* Kleur-vibes */
+.bbLogoLime{
+  box-shadow:
+    0 0 0 2px rgba(126,217,87,.34),
+    0 0 28px rgba(126,217,87,.42),
+    0 0 70px rgba(0,212,199,.18);
+}
+
+.bbLogoGold{
+  box-shadow:
+    0 0 0 2px rgba(255,204,51,.34),
+    0 0 30px rgba(255,204,51,.46),
+    0 0 82px rgba(255,138,31,.22);
+}
+
+.bbLogoAqua{
+  box-shadow:
+    0 0 0 2px rgba(0,212,199,.34),
+    0 0 30px rgba(0,212,199,.44),
+    0 0 82px rgba(141,53,255,.20);
+}
+
+.bbLogoPurple{
+  box-shadow:
+    0 0 0 2px rgba(141,53,255,.34),
+    0 0 30px rgba(141,53,255,.48),
+    0 0 82px rgba(255,79,147,.24);
+}
+
+.bbLogoRed{
+  box-shadow:
+    0 0 0 2px rgba(255,90,95,.34),
+    0 0 30px rgba(255,90,95,.48),
+    0 0 82px rgba(255,138,31,.24);
+}
+
+/* App header minder vierkant en rustiger */
+body:not(.playerMode) header,
+body.playerMode header{
+  position:relative;
+}
+
+body:not(.playerMode) .bbLogoHeader{
+  margin-top:4px;
+  margin-bottom:8px;
+}
+
+/* Popups krijgen logo als badge, niet als groot vierkant beeld */
+.hbHostStartModal .bbLogoPopup,
+.bbConfirmModal .bbLogoPopup,
+.bbModal .bbLogoPopup{
+  margin-bottom:14px;
+}
+
+/* Mobiel compacter */
+@media(max-width:520px){
+  .bbLogoHero{
+    width:190px;
+    height:190px;
+  }
+  .bbLogoHeader{
+    width:105px;
+    height:105px;
+  }
+  .bbLogoPopup,
+  .bbModalLogo,
+  .bbWinnerLogo{
+    width:165px;
+    height:165px;
+  }
+}
