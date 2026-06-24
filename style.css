@@ -4154,3 +4154,361 @@ body.playerMode .categoryDisplay{
 }
 .bbMonkeyImg{width:140px;height:auto}
 .bbMonkeySub{font-weight:900;color:#FFCC33}
+
+
+/* =========================
+   V78 Goed/Fout fullscreen overlays
+   ========================= */
+.bbAnswerOverlayV78{
+  position:fixed;
+  inset:0;
+  z-index:999999;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:14px;
+  background:rgba(0,0,0,.84);
+  backdrop-filter:blur(10px);
+  box-sizing:border-box;
+}
+.bbAnswerOverlayV78.show{
+  display:flex;
+}
+.bbAnswerCardV78{
+  width:min(96vw,560px);
+  max-height:96svh;
+  overflow:hidden;
+  border-radius:28px;
+  padding:16px;
+  text-align:center;
+  color:#fff;
+  background:
+    radial-gradient(circle at 20% 10%,rgba(255,255,255,.12),transparent 30%),
+    linear-gradient(145deg,rgba(255,255,255,.13),rgba(255,255,255,.045));
+  border:1px solid rgba(255,255,255,.20);
+  box-shadow:0 24px 80px rgba(0,0,0,.55);
+}
+.bbAnswerCardV78.good{
+  border-color:rgba(126,217,87,.45);
+}
+.bbAnswerCardV78.wrong{
+  border-color:rgba(255,90,95,.50);
+}
+.bbAnswerMonkeyV78{
+  width:min(135px,34vw);
+  height:auto;
+  display:block;
+  margin:0 auto 8px;
+}
+.bbAnswerTitleV78{
+  font-size:clamp(26px,6vw,42px);
+  line-height:1;
+  font-weight:900;
+  margin:4px 0 8px;
+}
+.bbAnswerTextV78{
+  font-size:clamp(16px,4vw,22px);
+  font-weight:900;
+  color:#FFCC33;
+  margin-bottom:10px;
+}
+.bbBigBingoV78{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:7px;
+  width:min(92vw,430px);
+  margin:10px auto;
+}
+.bbBigCellV78{
+  aspect-ratio:1/1;
+  border:2px solid rgba(255,255,255,.18);
+  border-radius:15px;
+  color:#111;
+  font-size:clamp(20px,7vw,34px);
+  font-weight:900;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+}
+.bbBigCellV78.marked{
+  box-shadow:inset 0 0 0 3px rgba(255,255,255,.65),0 0 18px rgba(255,255,255,.25);
+}
+.bbBigCellV78.pickable{
+  cursor:pointer;
+  outline:4px solid #fff;
+  box-shadow:0 0 24px rgba(255,255,255,.75), inset 0 0 18px rgba(255,255,255,.25);
+  animation:bbPickPulseV78 .7s ease-in-out infinite alternate;
+}
+.bbBigCellV78.blocked{
+  opacity:.30;
+}
+.bbBigCellV78.chosen{
+  opacity:1;
+  transform:scale(1.08);
+}
+@keyframes bbPickPulseV78{
+  from{transform:scale(.98);filter:brightness(1)}
+  to{transform:scale(1.04);filter:brightness(1.25)}
+}
+.bbAnswerHintV78{
+  font-size:13px;
+  opacity:.85;
+  font-weight:900;
+}
+.bbCorrectAnswerV78{
+  margin:14px auto;
+  padding:14px;
+  border-radius:18px;
+  background:rgba(0,0,0,.25);
+  border:1px solid rgba(255,255,255,.14);
+  font-size:clamp(18px,4.5vw,26px);
+  font-weight:900;
+  line-height:1.35;
+}
+.bbAnswerContinueV78{
+  width:100%;
+  max-width:280px;
+  margin:10px auto 0;
+  padding:13px 18px;
+  border-radius:18px;
+  font-size:18px;
+  font-weight:900;
+  border:0;
+  background:#fff;
+  color:#14001f;
+}
+
+@media(max-height:700px){
+  .bbAnswerCardV78{
+    padding:10px;
+    border-radius:22px;
+  }
+  .bbAnswerMonkeyV78{
+    width:min(95px,26vw);
+    margin-bottom:4px;
+  }
+  .bbAnswerTitleV78{
+    font-size:24px;
+    margin:2px 0 5px;
+  }
+  .bbAnswerTextV78{
+    font-size:15px;
+    margin-bottom:5px;
+  }
+  .bbBigBingoV78{
+    gap:5px;
+    width:min(88vw,330px);
+    margin:6px auto;
+  }
+  .bbBigCellV78{
+    border-radius:11px;
+    font-size:23px;
+  }
+}
+
+
+/* =========================
+   V79 - GEMARKEERDE/GEWONNEN VAKJES NIET STEEDS LATEN OPVALLEN
+   Alleen vakjes die NU gekozen mogen worden lichten op.
+   Al gekozen vakjes blijven rustig.
+   ========================= */
+
+/* Dashboard bingokaart: gekozen vakjes rustig houden */
+.compactCell.marked,
+#dashOwnCard .compactCell.marked,
+.bingoCell.marked,
+#dashOwnCard .bingoCell.marked{
+  outline:none !important;
+  animation:none !important;
+  transform:none !important;
+  filter:none !important;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.32) !important;
+}
+
+/* Alleen pickable vakjes mogen pulsen */
+.compactCell.pickable,
+#dashOwnCard .compactCell.pickable,
+.bingoCell.pickableCell{
+  animation:pickPulse .9s ease-in-out infinite alternate !important;
+}
+
+/* Fullscreen grote kaart: al gekozen vakjes niet laten gloeien */
+.bbBigCellV78.marked{
+  animation:none !important;
+  transform:none !important;
+  filter:none !important;
+  outline:none !important;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.38) !important;
+}
+
+/* Alleen vakjes die in deze ronde gekozen mogen worden krijgen glow */
+.bbBigCellV78.pickable{
+  animation:bbPickPulseV78 .7s ease-in-out infinite alternate !important;
+  outline:4px solid #fff !important;
+  box-shadow:0 0 24px rgba(255,255,255,.75), inset 0 0 18px rgba(255,255,255,.25) !important;
+}
+
+/* Zodra gekozen, korte feedback en daarna rustig */
+.bbBigCellV78.chosen{
+  animation:none !important;
+  outline:none !important;
+  box-shadow:inset 0 0 0 3px rgba(255,255,255,.45) !important;
+}
+
+
+/* =========================
+   V80 Fullscreen goed/fout + grote bingokaart
+   ========================= */
+.bbAnswerOverlayV80{
+  position:fixed;
+  inset:0;
+  z-index:999999;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:14px;
+  background:rgba(0,0,0,.86);
+  backdrop-filter:blur(10px);
+  box-sizing:border-box;
+}
+.bbAnswerOverlayV80.show{
+  display:flex;
+}
+.bbAnswerCardV80{
+  width:min(96vw,560px);
+  max-height:96svh;
+  overflow:hidden;
+  border-radius:28px;
+  padding:16px;
+  text-align:center;
+  color:#fff;
+  background:
+    radial-gradient(circle at 20% 10%,rgba(255,255,255,.12),transparent 30%),
+    linear-gradient(145deg,rgba(255,255,255,.13),rgba(255,255,255,.045));
+  border:1px solid rgba(255,255,255,.20);
+  box-shadow:0 24px 80px rgba(0,0,0,.55);
+}
+.bbAnswerCardV80.good{
+  border-color:rgba(126,217,87,.45);
+}
+.bbAnswerCardV80.wrong{
+  border-color:rgba(255,90,95,.50);
+}
+.bbAnswerMonkeyV80{
+  width:min(135px,34vw);
+  height:auto;
+  display:block;
+  margin:0 auto 8px;
+}
+.bbAnswerTitleV80{
+  font-size:clamp(26px,6vw,42px);
+  line-height:1;
+  font-weight:900;
+  margin:4px 0 8px;
+}
+.bbAnswerTextV80{
+  font-size:clamp(16px,4vw,22px);
+  font-weight:900;
+  color:#FFCC33;
+  margin-bottom:10px;
+}
+.bbBigBingoV80{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:7px;
+  width:min(92vw,430px);
+  margin:10px auto;
+}
+.bbBigCellV80{
+  aspect-ratio:1/1;
+  border:2px solid rgba(255,255,255,.18);
+  border-radius:15px;
+  color:#111;
+  font-size:clamp(20px,7vw,34px);
+  font-weight:900;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+}
+.bbBigCellV80.marked{
+  animation:none !important;
+  outline:none !important;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.38) !important;
+}
+.bbBigCellV80.pickable{
+  cursor:pointer;
+  outline:4px solid #fff;
+  box-shadow:0 0 24px rgba(255,255,255,.75), inset 0 0 18px rgba(255,255,255,.25);
+  animation:bbPickPulseV80 .7s ease-in-out infinite alternate;
+}
+.bbBigCellV80.blocked{
+  opacity:.30;
+}
+.bbBigCellV80.chosen{
+  opacity:1;
+  transform:scale(1.08);
+  animation:none !important;
+  outline:none !important;
+  box-shadow:inset 0 0 0 3px rgba(255,255,255,.45) !important;
+}
+@keyframes bbPickPulseV80{
+  from{transform:scale(.98);filter:brightness(1)}
+  to{transform:scale(1.04);filter:brightness(1.25)}
+}
+.bbAnswerHintV80{
+  font-size:13px;
+  opacity:.85;
+  font-weight:900;
+}
+.bbCorrectAnswerV80{
+  margin:14px auto;
+  padding:14px;
+  border-radius:18px;
+  background:rgba(0,0,0,.25);
+  border:1px solid rgba(255,255,255,.14);
+  font-size:clamp(18px,4.5vw,26px);
+  font-weight:900;
+  line-height:1.35;
+}
+.bbAnswerContinueV80{
+  width:100%;
+  max-width:280px;
+  margin:10px auto 0;
+  padding:13px 18px;
+  border-radius:18px;
+  font-size:18px;
+  font-weight:900;
+  border:0;
+  background:#fff;
+  color:#14001f;
+}
+
+@media(max-height:700px){
+  .bbAnswerCardV80{
+    padding:10px;
+    border-radius:22px;
+  }
+  .bbAnswerMonkeyV80{
+    width:min(95px,26vw);
+    margin-bottom:4px;
+  }
+  .bbAnswerTitleV80{
+    font-size:24px;
+    margin:2px 0 5px;
+  }
+  .bbAnswerTextV80{
+    font-size:15px;
+    margin-bottom:5px;
+  }
+  .bbBigBingoV80{
+    gap:5px;
+    width:min(88vw,330px);
+    margin:6px auto;
+  }
+  .bbBigCellV80{
+    border-radius:11px;
+    font-size:23px;
+  }
+}

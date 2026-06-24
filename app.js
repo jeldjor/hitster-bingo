@@ -5678,3 +5678,350 @@ window.bbShowWrongOverlay = function(answer){
   o.classList.add("show");
   setTimeout(()=>o.classList.remove("show"),3000);
 };
+
+
+
+
+/* =========================
+   V78 - GOED/FOUT ECHT GEKOPPELD
+   - Goed antwoord: fullscreen overlay met grote bingokaart
+   - Fout antwoord: fullscreen BB-aap reactie + juiste antwoord
+   ========================= */
+(function(){
+  let bbFeedbackListenerAttachedV78 = false;
+  let bbSeenFeedbackV78 = {};
+
+  function q(id){ return document.getElementById(id); }
+  function isPlayerPage(){
+    return !!new URLSearchParams(location.search).get("room");
+  }
+  function colorHexV78(key){
+    return {
+      yellow:"#FFCC33",
+      pink:"#00D4C7",
+      purple:"#FF8A1F",
+      blue:"#7ED957",
+      green:"#FF5A5F",
+      free:"#FFCC33"
+    }[key] || "rgba(255,255,255,.18)";
+  }
+  function cellIconV78(c, marked, index){
+    if(marked || index === 12) return "🐵";
+    if(c === "yellow") return "🟡";
+    if(c === "pink") return "🩵";
+    if(c === "purple") return "🟠";
+    if(c === "blue") return "🟢";
+    if(c === "green") return "🔴";
+    if(c === "free") return "🐵";
+    return "";
+  }
+
+  function overlayV78(){
+    let o = q("bbAnswerOverlayV78");
+    if(!o){
+      o = document.createElement("div");
+      o.id = "bbAnswerOverlayV78";
+      o.className = "bbAnswerOverlayV78";
+      document.body.appendChild(o);
+    }
+    return o;
+  }
+
+  function closeOverlayV78(){
+    const o = q("bbAnswerOverlayV78");
+    if(o) o.classList.remove("show");
+  }
+
+  window.bbShowGoodPickOverlayV78 = function(room, r){
+    const me = room.players?.[currentPlayerId] || {};
+    const card = me.card || [];
+    const marked = me.marked || {};
+    const o = overlayV78();
+
+    const cells = card.map((c,i) => {
+      const isMarked = !!marked[i] || i === 12;
+      const pickable = c === r.colorKey && c !== "free" && !marked[i];
+      return `<button type="button"
+        class="bbBigCellV78 ${isMarked ? "marked" : ""} ${pickable ? "pickable" : "blocked"}"
+        data-i="${i}"
+        style="background:${colorHexV78(c)}"
+        ${pickable ? "" : "disabled"}>
+          ${cellIconV78(c, isMarked, i)}
+      </button>`;
+    }).join("");
+
+    o.innerHTML = `
+      <div class="bbAnswerCardV78 good">
+        <img src="bb_logo_lime.png" class="bbAnswerMonkeyV78" alt="Bingo Beats">
+        <div class="bbAnswerTitleV78">😎 GOED ANTWOORD!</div>
+        <div class="bbAnswerTextV78">Kies één ${r.colorEmoji || ""} ${r.colorName || ""} vakje</div>
+        <div class="bbBigBingoV78">${cells}</div>
+        <div class="bbAnswerHintV78">Tik op een opgelicht vakje</div>
+      </div>
+    `;
+    o.classList.add("show");
+
+    o.querySelectorAll(".bbBigCellV78.pickable").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const i = Number(btn.dataset.i);
+        btn.classList.add("chosen");
+        btn.textContent = "🐵";
+        try{
+          if(typeof pickCell === "function") pickCell(i);
+        }catch(e){
+          alert("Vakje kiezen mislukt: " + e.message);
+        }
+        setTimeout(closeOverlayV78, 700);
+      });
+    });
+  };
+
+  window.bbShowWrongOverlayV78 = function(room, r){
+    const ans = r.correctAnswer || {};
+    const answerText = ans.track
+      ? `🎵 ${esc(ans.track || "-")}<br>🎤 ${esc(ans.artist || "-")}`
+      : "Volgende ronde beter!";
+
+    const o = overlayV78();
+    o.innerHTML = `
+      <div class="bbAnswerCardV78 wrong">
+        <img src="bb_logo_red.png" class="bbAnswerMonkeyV78" alt="Bingo Beats">
+        <div class="bbAnswerTitleV78">🙈 HELAAS!</div>
+        <div class="bbAnswerTextV78">Deze was lastig...</div>
+        <div class="bbCorrectAnswerV78">${answerText}</div>
+        <button type="button" class="bbAnswerContinueV78">Verder</button>
+      </div>
+    `;
+    o.classList.add("show");
+
+    o.querySelector(".bbAnswerContinueV78")?.addEventListener("click", closeOverlayV78);
+    setTimeout(closeOverlayV78, 4500);
+  };
+
+  function handleRoomFeedbackV78(room){
+    if(!isPlayerPage()) return;
+    if(!currentPlayerId) return;
+
+    const r = room.currentRound || {};
+    if(!r.id || r.status !== "judged") return;
+
+    const me = room.players?.[currentPlayerId] || {};
+    const good = room.correct?.[r.id]?.[currentPlayerId];
+
+    if(good !== true && good !== false) return;
+
+    const picked = me.lastPickedRound === r.id;
+    const key = r.id + "_" + (good ? "good" : "bad");
+
+    if(bbSeenFeedbackV78[key]) return;
+
+    if(good === true && !picked){
+      bbSeenFeedbackV78[key] = true;
+      window.bbShowGoodPickOverlayV78(room, r);
+      return;
+    }
+
+    if(good === false){
+      bbSeenFeedbackV78[key] = true;
+      window.bbShowWrongOverlayV78(room, r);
+    }
+  }
+
+  function attachFeedbackListenerV78(){
+    if(bbFeedbackListenerAttachedV78) return;
+    if(!isPlayerPage()) return;
+    if(typeof db === "undefined" || !db) return;
+    if(!currentRoomCode) return;
+
+    bbFeedbackListenerAttachedV78 = true;
+    db.ref("rooms/" + currentRoomCode).on("value", s => {
+      try{
+        handleRoomFeedbackV78(s.val() || {});
+      }catch(e){
+        console.error("V78 feedback fout", e);
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(attachFeedbackListenerV78, 1000);
+    setTimeout(attachFeedbackListenerV78, 2500);
+  });
+  setInterval(attachFeedbackListenerV78, 1500);
+})();
+
+
+
+
+/* =========================
+   V80 - GROTE KAART + BB AAP ECHT AAN DASHBOARD GEKOPPELD
+   Deze patch haakt direct in op renderCompactCard(), dus zodra de speler
+   een beoordeling krijgt, verschijnt de overlay echt.
+   ========================= */
+(function(){
+  const seenV80 = {};
+
+  function q(id){ return document.getElementById(id); }
+
+  function isPlayerPageV80(){
+    return !!new URLSearchParams(location.search).get("room");
+  }
+
+  function colorHexV80(key){
+    return {
+      yellow:"#FFCC33",
+      pink:"#00D4C7",
+      purple:"#FF8A1F",
+      blue:"#7ED957",
+      green:"#FF5A5F",
+      free:"#FFCC33"
+    }[key] || "rgba(255,255,255,.18)";
+  }
+
+  function iconV80(c, marked, index){
+    if(marked || index === 12) return "🐵";
+    if(c === "yellow") return "🟡";
+    if(c === "pink") return "🩵";
+    if(c === "purple") return "🟠";
+    if(c === "blue") return "🟢";
+    if(c === "green") return "🔴";
+    return "";
+  }
+
+  function overlayV80(){
+    let o = q("bbAnswerOverlayV80");
+    if(!o){
+      o = document.createElement("div");
+      o.id = "bbAnswerOverlayV80";
+      o.className = "bbAnswerOverlayV80";
+      document.body.appendChild(o);
+    }
+    return o;
+  }
+
+  function closeV80(){
+    const o = q("bbAnswerOverlayV80");
+    if(o) o.classList.remove("show");
+  }
+
+  function showGoodV80(room, r){
+    const me = room.players?.[currentPlayerId] || {};
+    const card = me.card || [];
+    const marked = me.marked || {};
+    const o = overlayV80();
+
+    const cells = card.map((c,i) => {
+      const isMarked = !!marked[i] || i === 12;
+      const pickable = c === r.colorKey && c !== "free" && !marked[i];
+      return `<button type="button"
+        class="bbBigCellV80 ${isMarked ? "marked" : ""} ${pickable ? "pickable" : "blocked"}"
+        data-i="${i}"
+        style="background:${colorHexV80(c)}"
+        ${pickable ? "" : "disabled"}>
+        ${iconV80(c, isMarked, i)}
+      </button>`;
+    }).join("");
+
+    o.innerHTML = `
+      <div class="bbAnswerCardV80 good">
+        <img src="bb_logo_lime.png" class="bbAnswerMonkeyV80" alt="Bingo Beats">
+        <div class="bbAnswerTitleV80">😎 GOED ANTWOORD!</div>
+        <div class="bbAnswerTextV80">Kies één ${r.colorEmoji || ""} ${r.colorName || ""} vakje</div>
+        <div class="bbBigBingoV80">${cells}</div>
+        <div class="bbAnswerHintV80">Tik op een opgelicht vakje</div>
+      </div>
+    `;
+    o.classList.add("show");
+
+    o.querySelectorAll(".bbBigCellV80.pickable").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const i = Number(btn.dataset.i);
+        btn.classList.add("chosen");
+        btn.textContent = "🐵";
+        try{
+          if(typeof pickCell === "function"){
+            pickCell(i);
+          }
+        }catch(e){
+          alert("Vakje kiezen mislukt: " + e.message);
+        }
+        setTimeout(closeV80, 650);
+      });
+    });
+  }
+
+  function showWrongV80(room, r){
+    const ans = r.correctAnswer || {};
+    const answer = ans.track
+      ? `🎵 ${esc(ans.track || "-")}<br>🎤 ${esc(ans.artist || "-")}`
+      : "Volgende ronde beter!";
+
+    const o = overlayV80();
+    o.innerHTML = `
+      <div class="bbAnswerCardV80 wrong">
+        <img src="bb_logo_red.png" class="bbAnswerMonkeyV80" alt="Bingo Beats">
+        <div class="bbAnswerTitleV80">🙈 HELAAS!</div>
+        <div class="bbAnswerTextV80">Deze was lastig...</div>
+        <div class="bbCorrectAnswerV80">${answer}</div>
+        <button type="button" class="bbAnswerContinueV80">Verder</button>
+      </div>
+    `;
+    o.classList.add("show");
+    o.querySelector(".bbAnswerContinueV80")?.addEventListener("click", closeV80);
+    setTimeout(closeV80, 4500);
+  }
+
+  function maybeShowFeedbackV80(room, r){
+    if(!isPlayerPageV80()) return;
+    if(!currentPlayerId) return;
+    if(!r || !r.id || r.status !== "judged") return;
+
+    const me = room.players?.[currentPlayerId] || {};
+    const good = room.correct?.[r.id]?.[currentPlayerId];
+
+    if(good !== true && good !== false) return;
+
+    const picked = me.lastPickedRound === r.id;
+
+    if(good === true && !picked){
+      const key = r.id + "_good";
+      if(seenV80[key]) return;
+      seenV80[key] = true;
+      showGoodV80(room, r);
+      return;
+    }
+
+    if(good === false){
+      const key = r.id + "_bad";
+      if(seenV80[key]) return;
+      seenV80[key] = true;
+      showWrongV80(room, r);
+    }
+  }
+
+  function installV80(){
+    if(window.__V80_BIG_CARD_INSTALLED) return;
+    if(typeof renderCompactCard !== "function") return;
+
+    window.__V80_BIG_CARD_INSTALLED = true;
+    const oldRenderCompactCard = renderCompactCard;
+
+    renderCompactCard = function(room, r){
+      const result = oldRenderCompactCard.apply(this, arguments);
+      try{
+        maybeShowFeedbackV80(room || {}, r || {});
+      }catch(e){
+        console.error("V80 feedback fout", e);
+      }
+      return result;
+    };
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(installV80, 500);
+    setTimeout(installV80, 1500);
+    setTimeout(installV80, 3000);
+  });
+
+  setInterval(installV80, 1500);
+})();
