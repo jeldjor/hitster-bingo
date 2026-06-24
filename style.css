@@ -3718,3 +3718,16 @@ body.playerMode .categoryDisplay{font-size:14px !important;}
   .hostQrV73{width:92px;height:92px;}
   .hostRoomCodeTextV73{font-size:30px;}
 }
+
+
+/* V74 copy button */
+.copyRoomLinkBtn{
+  width:100% !important;
+  margin-top:8px !important;
+  padding:9px 10px !important;
+  border-radius:12px !important;
+  font-size:13px !important;
+  font-weight:900 !important;
+  background:linear-gradient(135deg,#00D4C7,#7ED957) !important;
+  color:#06130f !important;
+}

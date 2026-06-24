@@ -5493,3 +5493,104 @@ document.addEventListener("click", function(e){
   setTimeout(setModeAndVisibilityV73, 1200);
   setInterval(setModeAndVisibilityV73, 2500);
 })();
+
+
+
+
+/* =========================
+   V74 COPY LINK BLIJFT STAAN
+   Fix: na Nieuwe kamer maken wordt roomBox opnieuw opgebouwd.
+   Deze laag zet de copy-knop altijd terug.
+   ========================= */
+(function(){
+  function q(id){ return document.getElementById(id); }
+
+  window.copyRoomLink = function(){
+    const input = q("joinLink");
+    const btn = q("copyRoomLinkBtn");
+    const code = (typeof currentRoomCode !== "undefined" && currentRoomCode)
+      ? currentRoomCode
+      : (localStorage.getItem("hb_host_room") || "");
+    const link = input?.value || (code ? location.origin + location.pathname + "?room=" + code : "");
+    if(!link) return;
+
+    const done = () => {
+      if(btn){
+        btn.textContent = "✅ Gekopieerd";
+        setTimeout(() => btn.textContent = "📋 Kopieer link", 1500);
+      }
+    };
+
+    if(navigator.clipboard?.writeText){
+      navigator.clipboard.writeText(link).then(done).catch(() => {
+        try{ input?.select(); document.execCommand("copy"); }catch(e){}
+        done();
+      });
+    }else{
+      try{ input?.select(); document.execCommand("copy"); }catch(e){}
+      done();
+    }
+  };
+
+  function ensureCopyButtonV74(){
+    const input = q("joinLink");
+    if(!input) return;
+
+    if(!q("copyRoomLinkBtn")){
+      const btn = document.createElement("button");
+      btn.id = "copyRoomLinkBtn";
+      btn.type = "button";
+      btn.className = "copyRoomLinkBtn";
+      btn.textContent = "📋 Kopieer link";
+      input.insertAdjacentElement("afterend", btn);
+    }
+  }
+
+  document.addEventListener("click", function(e){
+    if(e.target && e.target.id === "copyRoomLinkBtn"){
+      e.preventDefault();
+      window.copyRoomLink();
+    }
+  });
+
+  if(typeof showRoom === "function" && !window.__showRoomV74Wrapped){
+    window.__showRoomV74Wrapped = true;
+    const oldShowRoom = showRoom;
+    showRoom = function(){
+      const result = oldShowRoom.apply(this, arguments);
+      setTimeout(ensureCopyButtonV74, 20);
+      setTimeout(ensureCopyButtonV74, 250);
+      return result;
+    };
+  }
+
+  if(typeof createRoom === "function" && !window.__createRoomV74Wrapped){
+    window.__createRoomV74Wrapped = true;
+    const oldCreateRoom = createRoom;
+    createRoom = function(){
+      const result = oldCreateRoom.apply(this, arguments);
+      setTimeout(ensureCopyButtonV74, 300);
+      setTimeout(ensureCopyButtonV74, 900);
+      setTimeout(ensureCopyButtonV74, 1600);
+      return result;
+    };
+  }
+
+  if(typeof hbRenderRoomBoxV7B === "function" && !window.__hbRenderV74Wrapped){
+    window.__hbRenderV74Wrapped = true;
+    const oldHbRender = hbRenderRoomBoxV7B;
+    hbRenderRoomBoxV7B = function(code){
+      const result = oldHbRender.apply(this, arguments);
+      setTimeout(ensureCopyButtonV74, 20);
+      setTimeout(ensureCopyButtonV74, 250);
+      return result;
+    };
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(ensureCopyButtonV74, 300);
+    setTimeout(ensureCopyButtonV74, 1200);
+  });
+
+  setInterval(ensureCopyButtonV74, 2000);
+})();
