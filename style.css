@@ -3571,7 +3571,7 @@ body:not(.playerMode) .bbLogoHeader{
 
 
 /* =========================
-   V72 CLEAN UI
+   V73 GOEDE APP UI
    ========================= */
 #modeText{
   display:inline-block !important;
@@ -3592,83 +3592,129 @@ body:not(.playerMode) .bbLogoHeader{
   background:linear-gradient(135deg,#00D4C7,#7ED957) !important;
   color:#06130f !important;
 }
-.discoIcon,
-.wheel,
-.wheelWrap,
-.bbOldPickerRemoved{
-  display:none !important;
+.hostRoomGridV73{
+  display:grid;
+  grid-template-columns:0.8fr 1.35fr 104px;
+  gap:10px;
+  align-items:stretch;
 }
-.bbPickerV72{
-  width:min(520px,94%);
-  min-height:230px;
+.hostRoomCodeV73,
+.hostRoomLinkV73{
+  padding:10px;
+  border-radius:14px;
+  background:rgba(0,0,0,.20);
+  border:1px solid rgba(255,255,255,.12);
+}
+.hostRoomLabelV73{
+  font-size:11px;
+  opacity:.75;
+  font-weight:900;
+  margin-bottom:6px;
+}
+.hostRoomCodeTextV73{
+  font-size:34px;
+  line-height:1;
+  font-weight:900;
+  color:#7ED957;
+  letter-spacing:2px;
+}
+.hostRoomLinkV73 input{
+  font-size:11px !important;
+  padding:8px !important;
+  height:auto !important;
+}
+.hostQrV73{
+  width:104px;
+  height:104px;
+  background:white;
+  border-radius:12px;
+  padding:5px;
+  align-self:center;
+}
+.discoIcon,.wheel,.wheelWrap,.bbOldPickerRemoved{display:none !important;}
+.bbPickerV73{
+  width:min(360px,96%);
+  min-height:150px;
   margin:0 auto;
-  padding:18px;
-  border-radius:28px;
+  padding:12px;
+  border-radius:20px;
   background:linear-gradient(145deg,rgba(255,255,255,.10),rgba(255,255,255,.035));
   border:1px solid rgba(255,255,255,.16);
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  gap:12px;
-}
-.bbPickerLogoV72{
-  width:92px;
-  height:auto;
-  display:block;
-}
-.bbPickerTitleV72{
-  color:#FFCC33;
-  font-size:22px;
-  font-weight:900;
-  text-align:center;
-}
-.bbPickerDotsV72{
-  display:grid;
-  grid-template-columns:repeat(5,1fr);
-  gap:9px;
-  width:min(380px,100%);
-}
-.bbPickerDotsV72 span{
-  display:block;
-  aspect-ratio:1.35/1;
-  border-radius:17px;
-  background:var(--c);
-  box-shadow:0 0 14px var(--c);
-  animation:bbPulseV72 1s ease-in-out infinite alternate;
-}
-.bbPickerDotsV72 span:nth-child(2){animation-delay:.1s}
-.bbPickerDotsV72 span:nth-child(3){animation-delay:.2s}
-.bbPickerDotsV72 span:nth-child(4){animation-delay:.3s}
-.bbPickerDotsV72 span:nth-child(5){animation-delay:.4s}
-@keyframes bbPulseV72{
-  from{transform:translateY(0) scale(.96)}
-  to{transform:translateY(-7px) scale(1.04)}
-}
-.bbPickerSmallV72{
-  font-size:14px;
-  font-weight:900;
-  opacity:.9;
-}
-.bbPickedV72{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
   gap:8px;
-  padding:16px;
 }
-.bbPickedBallV72{
-  width:74px;
-  height:74px;
-  border-radius:50%;
+.bbPickerLogoV73{width:60px;height:auto;}
+.bbPickerTitleV73{color:#FFCC33;font-size:16px;font-weight:900;text-align:center;}
+.bbPickerDotsV73{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;width:min(250px,100%);}
+.bbPickerDotsV73 span{display:block;aspect-ratio:1.35/1;border-radius:12px;background:var(--c);box-shadow:0 0 10px var(--c);animation:bbPulseV73 1s ease-in-out infinite alternate;}
+.bbPickerDotsV73 span:nth-child(2){animation-delay:.1s}
+.bbPickerDotsV73 span:nth-child(3){animation-delay:.2s}
+.bbPickerDotsV73 span:nth-child(4){animation-delay:.3s}
+.bbPickerDotsV73 span:nth-child(5){animation-delay:.4s}
+@keyframes bbPulseV73{from{transform:translateY(0) scale(.96)}to{transform:translateY(-5px) scale(1.04)}}
+.bbPickerSmallV73{font-size:12px;font-weight:900;opacity:.9;}
+.bbPickedV73{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:100%;}
+.bbPickedBallV73{width:52px;height:52px;border-radius:50%;}
+.bbPickedNameV73{font-size:24px;font-weight:900;color:#fff;}
+.bbPickedCatV73{color:#FFCC33;font-weight:900;font-size:15px;text-align:center;}
+
+/* SPELER MOBIEL: 4 vensters blijven 2x2, maar passen beter */
+body.playerMode .app{min-height:100svh;padding-bottom:8px !important;}
+body.playerMode header{margin:4px 0 6px !important;}
+body.playerMode .bbLogoHeader{width:110px !important;max-width:30vw !important;margin-bottom:2px !important;}
+body.playerMode #modeText{padding:5px 14px !important;font-size:15px !important;}
+body.playerMode .dashTop{gap:6px !important;margin-bottom:6px !important;}
+body.playerMode .dashPill{min-height:42px !important;padding:5px 7px !important;font-size:13px !important;}
+body.playerMode .dashGrid{
+  display:grid !important;
+  grid-template-columns:1fr 1fr !important;
+  gap:7px !important;
+  height:calc(100svh - 245px) !important;
+  min-height:430px !important;
 }
-.bbPickedNameV72{
-  font-size:26px;
-  font-weight:900;
-  color:#fff;
+body.playerMode .dashPanel{
+  min-height:0 !important;
+  padding:8px !important;
+  overflow:hidden !important;
 }
-.bbPickedCatV72{
-  color:#FFCC33;
-  font-weight:900;
-  text-align:center;
+body.playerMode .panelTitle{font-size:13px !important;margin-bottom:6px !important;}
+body.playerMode .compactBingoCard{
+  display:grid !important;
+  grid-template-columns:repeat(5,1fr) !important;
+  gap:4px !important;
+  width:100% !important;
+  max-width:205px !important;
+  margin:0 auto !important;
+}
+body.playerMode .compactBingoCard .bingoCell,
+body.playerMode .bingoCell{
+  width:auto !important;
+  aspect-ratio:1/1 !important;
+  min-width:0 !important;
+  font-size:16px !important;
+}
+body.playerMode .dashHint{font-size:13px !important;margin-bottom:4px !important;}
+body.playerMode .dashStatus{font-size:12px !important;margin-top:4px !important;}
+body.playerMode .compactScoreboard .scoreCard,
+body.playerMode .scoreCard{padding:7px !important;font-size:13px !important;}
+body.playerMode .colorDisplay{font-size:44px !important;}
+body.playerMode .categoryDisplay{font-size:14px !important;}
+
+@media(max-width:430px){
+  body.playerMode .bbLogoHeader{width:98px !important;}
+  body.playerMode .dashGrid{
+    height:calc(100svh - 225px) !important;
+    min-height:400px !important;
+    gap:6px !important;
+  }
+  body.playerMode .dashPanel{padding:7px !important;border-radius:18px !important;}
+  body.playerMode .panelTitle{font-size:12px !important;}
+  body.playerMode .compactBingoCard{gap:3px !important;max-width:190px !important;}
+  body.playerMode .bingoCell{font-size:15px !important;}
+  .hostRoomGridV73{grid-template-columns:0.75fr 1.35fr 92px;gap:8px;}
+  .hostQrV73{width:92px;height:92px;}
+  .hostRoomCodeTextV73{font-size:30px;}
 }

@@ -334,9 +334,941 @@ function hbBootV7B(){
 init();
 
 
+/* =========================
+   V4 PICKER FIX
+   Spelers zien dezelfde discobal/draairad animatie als host
+   ========================= */
+
+function sharedPickerHTML(mode){
+  if(mode === "wheel"){
+    return `<div class="playerPickerBig">
+      <div class="bbOldPickerRemoved"><div class="pointer"></div><div class="bbOldPickerRemoved"></div></div>
+      <div class="pickerTitle">Kleurenmixer start...</div>
+    </div>`;
+  }
+
+  return `<div class="playerPickerBig">
+    <div class="bbOldPickerRemoved">🎮</div>
+    <div class="pickerTitle">Kleurenmixer start...</div>
+  </div>`;
+}
+
+// Override startRoundVisual: stuur pickerStatus meteen naar Firebase
+startRoundVisual = function(room){
+  $("hostAnswerArea").innerHTML = "";
+  $("playBtn").disabled = true;
+  $("showAnswerBtn").disabled = true;
+
+  const mode = Math.random() < .5 ? "disco" : "wheel";
+  const pickerMarkup = sharedPickerHTML(mode);
+
+  $("hostPickerArea").innerHTML = pickerMarkup;
+  currentRoundId = "r_" + Date.now();
+
+  // Belangrijk: dit wordt direct naar spelers gestuurd
+  db.ref("rooms/" + room + "/currentRound").set({
+    id: currentRoundId,
+    status: "picking",
+    pickerMode: mode,
+    pickerMarkup: pickerMarkup,
+    pickerStartedAt: firebase.database.ServerValue.TIMESTAMP,
+    seconds: Number($("duration").value) || 20
+  }).then(() => {
+    if($("hostStatus")) $("hostStatus").textContent = "Kleurkiezer draait bij host en spelers...";
+  });
+
+  setTimeout(() => {
+    flash();
+
+    const color = pick(COLORS);
+    const cat = $(color.input).value || "Geen categorie";
+
+    $("hostPickerArea").innerHTML =
+      `<div class="colorDisplay">${color.emoji}<br>${color.name}</div>
+       <div class="categoryDisplay">${esc(cat)}</div>`;
+
+    const round = {
+      id: currentRoundId,
+      status: "ready",
+      pickerMode: mode,
+      pickerMarkup: pickerMarkup,
+      colorKey: color.key,
+      colorName: color.name,
+      colorEmoji: color.emoji,
+      category: cat,
+      seconds: Number($("duration").value) || 20
+    };
+
+    db.ref("rooms/" + room + "/currentRound").set(round);
+
+    $("playBtn").disabled = false;
+    $("showAnswerBtn").disabled = false;
+    $("hostScorePanel").classList.remove("hidden");
+  }, 3500);
+};
+
+function renderPlayerPickerFixed(round){
+  const area = $("playerPickerArea");
+  if(!area) return;
+
+  area.innerHTML = round.pickerMarkup || sharedPickerHTML(round.pickerMode || "disco");
+}
+
+// Override listenPlayer met expliciete picking status
+listenPlayer = function(){
+  db.ref("rooms/" + currentRoomCode).on("value", s => {
+    const room = s.val() || {};
+    const r = room.currentRound || {};
+    activeRound = r;
+
+    renderLobby(room);
+
+    if(!r.id){
+      showScreen("screenLobby");
+      return;
+    }
+
+    if(r.status === "picking"){
+      renderPlayerPickerFixed(r);
+      showScreen("screenPicker");
+      return;
+    }
+
+    if(r.status === "ready"){
+      renderColor(r);
+      showScreen("screenColor");
+      return;
+    }
+
+    if(r.status === "answering"){
+      renderAnswer(room, r);
+      showScreen("screenAnswer");
+      return;
+    }
+
+    if(r.status === "locked"){
+      renderScore(room);
+      showScreen("screenScore");
+      return;
+    }
+
+    if(r.status === "judged"){
+      renderScore(room);
+      const me = room.players?.[currentPlayerId] || {};
+      const good = room.correct?.[r.id]?.[currentPlayerId] === true;
+      const picked = me.lastPickedRound === r.id;
+
+      if(good && !picked){
+        renderPick(room, r);
+        showScreen("screenPick");
+      }else{
+        showScreen("screenScore");
+      }
+    }
+  });
+
+  listenBingo(currentRoomCode);
+};
 
 
-/* V72: legacy block removed during cleanup */
+/* =========================
+   V4.1 FLOW FIX
+   Correcte flow:
+   START RONDE -> picker bij host + spelers
+   kleur/categorie zichtbaar
+   pas bij SPEEL NUMMER -> spelers naar antwoordscherm
+   timer klaar -> automatisch antwoord tonen + ronde locked
+   ========================= */
+
+function answerObjectV41(){
+  if(!currentTrack) return null;
+  return {
+    track: currentTrack.name || "",
+    artist: currentTrack.artists || "",
+    album: currentTrack.album || "",
+    year: (currentTrack.release_date || "").slice(0,4) || ""
+  };
+}
+
+function showHostAnswerV41(ans){
+  const area = document.getElementById("hostAnswerArea");
+  if(!area || !ans) return;
+  area.innerHTML =
+    `<div class="correctBox">
+      <h3>${esc(ans.track || "-")}</h3>
+      <p>${esc(ans.artist || "-")}</p>
+      <p>${esc(ans.album || "-")} — ${esc(ans.year || "-")}</p>
+    </div>`;
+}
+
+function publishAnswerV41(){
+  const room = currentRoomCode || localStorage.getItem("hb_host_room");
+  const ans = answerObjectV41();
+  if(!db || !room || !ans) return Promise.resolve();
+
+  showHostAnswerV41(ans);
+
+  return db.ref("rooms/" + room + "/currentRound").update({
+    correctAnswer: ans,
+    correctAnswerShown: true
+  });
+}
+
+// Alleen locken NA timer, inclusief antwoord zichtbaar maken
+lockRound = function(){
+  const room = currentRoomCode || localStorage.getItem("hb_host_room");
+  if(!db || !room) return;
+
+  publishAnswerV41().then(() => {
+    return db.ref("rooms/" + room + "/currentRound").update({
+      status: "locked"
+    });
+  }).then(() => {
+    const st = document.getElementById("hostStatus");
+    if(st) st.textContent = "Tijd voorbij. Antwoord automatisch zichtbaar bij spelers.";
+  }).catch(e => alert("Timer/antwoord fout: " + e.message));
+};
+
+// Toon antwoord knop blijft handmatig kunnen
+showAnswer = function(){
+  publishAnswerV41().catch(e => alert("Antwoord tonen mislukt: " + e.message));
+};
+
+// Speel knop: zet pas HIER de ronde op answering
+playHidden = async function(){
+  try{
+    if(!currentTrack){
+      alert("Geen nummer gekozen. Druk eerst op START RONDE.");
+      return;
+    }
+
+    const playBtn = document.getElementById("playBtn");
+    if(playBtn){
+      playBtn.disabled = true;
+      playBtn.textContent = "🎵 Nummer speelt...";
+    }
+
+    if(!deviceId){
+      await activatePlayer();
+      await new Promise(r => setTimeout(r, 1200));
+    }
+
+    if(!deviceId){
+      alert("Geen Spotify-speler actief. Klik eerst op Activeer Spotify-speler.");
+      if(playBtn){
+        playBtn.disabled = false;
+        playBtn.textContent = "🎵 Speel verborgen nummer";
+      }
+      return;
+    }
+
+    const dur = (Number(document.getElementById("duration").value) || 20) * 1000;
+    let pos = 0;
+
+    if(document.getElementById("randomStart").checked && currentTrack.duration_ms > dur + 40000){
+      const max = Math.max(0, currentTrack.duration_ms - dur - 5000);
+      pos = Math.floor(20000 + Math.random() * Math.max(1, max - 20000));
+    }
+
+    await api(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+      method: "PUT",
+      body: JSON.stringify({uris:[currentTrack.uri], position_ms:pos})
+    });
+
+    const room = currentRoomCode || localStorage.getItem("hb_host_room");
+    const deadline = Date.now() + dur;
+
+    await db.ref("rooms/" + room + "/currentRound").update({
+      status: "answering",
+      deadlineMs: deadline,
+      musicStartedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    const stopBtn = document.getElementById("stopBtn");
+    if(stopBtn) stopBtn.disabled = false;
+
+    clearTimeout(lockTimer);
+    lockTimer = setTimeout(lockRound, dur);
+
+    clearTimeout(stopTimer);
+    stopTimer = setTimeout(stopPlayback, dur);
+
+    const st = document.getElementById("hostStatus");
+    if(st) st.textContent = "Muziek speelt. Spelers kunnen nu antwoorden.";
+
+  }catch(e){
+    alert("Afspelen mislukt: " + e.message);
+    const playBtn = document.getElementById("playBtn");
+    if(playBtn){
+      playBtn.disabled = false;
+      playBtn.textContent = "🎵 Speel verborgen nummer";
+    }
+  }
+};
+
+// Start ronde: na picker blijft speler op kleur/categorie tot muziek echt start
+// Deze override zorgt ook dat speelknop opnieuw goed enabled is.
+startRoundVisual = function(room){
+  document.getElementById("hostAnswerArea").innerHTML = "";
+  document.getElementById("playBtn").disabled = true;
+  document.getElementById("showAnswerBtn").disabled = true;
+  document.getElementById("playBtn").textContent = "🎵 Speel verborgen nummer";
+
+  const mode = Math.random() < .5 ? "disco" : "wheel";
+  const pickerMarkup = typeof sharedPickerHTML === "function"
+    ? sharedPickerHTML(mode)
+    : pickerHTML(mode);
+
+  document.getElementById("hostPickerArea").innerHTML = pickerMarkup;
+  currentRoundId = "r_" + Date.now();
+
+  db.ref("rooms/" + room + "/currentRound").set({
+    id: currentRoundId,
+    status: "picking",
+    pickerMode: mode,
+    pickerMarkup: pickerMarkup,
+    pickerStartedAt: firebase.database.ServerValue.TIMESTAMP,
+    seconds: Number(document.getElementById("duration").value) || 20
+  });
+
+  setTimeout(() => {
+    flash();
+
+    const color = pick(COLORS);
+    const cat = document.getElementById(color.input).value || "Geen categorie";
+
+    document.getElementById("hostPickerArea").innerHTML =
+      `<div class="colorDisplay">${color.emoji}<br>${color.name}</div>
+       <div class="categoryDisplay">${esc(cat)}</div>`;
+
+    const round = {
+      id: currentRoundId,
+      status: "ready",
+      pickerMode: mode,
+      pickerMarkup: pickerMarkup,
+      colorKey: color.key,
+      colorName: color.name,
+      colorEmoji: color.emoji,
+      category: cat,
+      seconds: Number(document.getElementById("duration").value) || 20
+    };
+
+    db.ref("rooms/" + room + "/currentRound").set(round);
+
+    document.getElementById("playBtn").disabled = false;
+    document.getElementById("showAnswerBtn").disabled = false;
+    document.getElementById("hostScorePanel").classList.remove("hidden");
+
+    const st = document.getElementById("hostStatus");
+    if(st) st.textContent = "Kleur bekend. Klik nu op Speel verborgen nummer.";
+  }, 3500);
+};
+
+// Player listener strak: ready = kleur/categorie tonen, answering = antwoordscherm
+listenPlayer = function(){
+  db.ref("rooms/" + currentRoomCode).on("value", s => {
+    const room = s.val() || {};
+    const r = room.currentRound || {};
+    activeRound = r;
+
+    renderLobby(room);
+
+    if(!r.id){
+      showScreen("screenLobby");
+      return;
+    }
+
+    if(r.status === "picking"){
+      if(typeof renderPlayerPickerFixed === "function") renderPlayerPickerFixed(r);
+      else renderPlayerPicker(r);
+      showScreen("screenPicker");
+      return;
+    }
+
+    if(r.status === "ready"){
+      renderColor(r);
+      showScreen("screenColor");
+      return;
+    }
+
+    if(r.status === "answering"){
+      renderAnswer(room, r);
+      showScreen("screenAnswer");
+      return;
+    }
+
+    if(r.status === "locked"){
+      renderScore(room);
+      showScreen("screenScore");
+      return;
+    }
+
+    if(r.status === "judged"){
+      renderScore(room);
+      const me = room.players?.[currentPlayerId] || {};
+      const good = room.correct?.[r.id]?.[currentPlayerId] === true;
+      const picked = me.lastPickedRound === r.id;
+
+      if(good && !picked){
+        renderPick(room, r);
+        showScreen("screenPick");
+      }else{
+        showScreen("screenScore");
+      }
+    }
+  });
+
+  listenBingo(currentRoomCode);
+};
+
+// Rebind knoppen, omdat oude listeners naar oude functies kunnen wijzen
+function rebindHostButtonsV41(){
+  const bindings = [
+    ["playBtn", playHidden],
+    ["showAnswerBtn", showAnswer],
+    ["lockBtn", lockRound]
+  ];
+
+  bindings.forEach(([id, fn]) => {
+    const old = document.getElementById(id);
+    if(!old) return;
+    const fresh = old.cloneNode(true);
+    old.parentNode.replaceChild(fresh, old);
+    fresh.addEventListener("click", fn);
+  });
+}
+
+setTimeout(rebindHostButtonsV41, 400);
+setTimeout(rebindHostButtonsV41, 1200);
+
+
+/* =========================
+   V4.2 REALTIME SCOREBOARD
+   Na eigen antwoord direct live scorebord van HUIDIGE ronde
+   ========================= */
+
+let lastSeenRoundIdRealtime = "";
+
+// Reset oude score zodra er een nieuwe ronde is
+function clearRealtimeRoundUi(roundId){
+  if(!roundId || lastSeenRoundIdRealtime === roundId) return;
+  lastSeenRoundIdRealtime = roundId;
+
+  const score = document.getElementById("playerScoreboard");
+  if(score) score.innerHTML = "Nog geen antwoorden voor deze ronde.";
+
+  const correct = document.getElementById("correctAnswerBox");
+  if(correct){
+    correct.classList.add("hidden");
+    correct.innerHTML = "";
+  }
+
+  const answer = document.getElementById("answerInput");
+  if(answer) answer.value = "";
+
+  const status = document.getElementById("answerStatus");
+  if(status) status.textContent = "";
+
+  const timer = document.getElementById("timerBox");
+  if(timer) timer.textContent = "⏱️ --";
+}
+
+function playerHasAnsweredCurrentRound(room, round){
+  return !!(round && round.id && room.answers && room.answers[round.id] && room.answers[round.id][currentPlayerId]);
+}
+
+function renderScoreRealtime(room){
+  const r = room.currentRound || {};
+  if(!r.id) return;
+
+  clearRealtimeRoundUi(r.id);
+
+  const box = document.getElementById("correctAnswerBox");
+  const ans = r.correctAnswer;
+
+  if(box){
+    if(ans){
+      box.classList.remove("hidden");
+      box.innerHTML =
+        `<h3>🐵 Juiste antwoord</h3>
+         <p>🎵 ${esc(ans.track || "-")}</p>
+         <p>👤 ${esc(ans.artist || "-")}</p>
+         <p>📅 ${esc(ans.year || "-")}</p>
+         <p>💿 ${esc(ans.album || "-")}</p>`;
+    }else{
+      box.classList.add("hidden");
+      box.innerHTML = "";
+    }
+  }
+
+  const players = room.players || {};
+  const answers = room.answers && room.answers[r.id] ? room.answers[r.id] : {};
+  const correct = room.correct && room.correct[r.id] ? room.correct[r.id] : {};
+
+  const score = document.getElementById("playerScoreboard");
+  if(!score) return;
+
+  score.innerHTML = Object.entries(players).map(([pid,p]) => {
+    const hasAnswer = answers[pid] && typeof answers[pid].answer !== "undefined";
+    const answerText = hasAnswer && String(answers[pid].answer).trim()
+      ? answers[pid].answer
+      : (hasAnswer ? "Leeg antwoord" : "Nog niet ingevuld");
+
+    let st = undefined;
+    if(r.status === "judged") st = correct[pid];
+
+    const cls = st === true ? "scoreGood" : st === false ? "scoreBad" : "scorePending";
+    const icon = st === true ? "🐵" : st === false ? "❌" : (hasAnswer ? "📝" : "⏳");
+
+    return `<div class="scoreCard ${cls}">
+      <div class="scoreName" onclick="showOther('${pid}')">${esc(p.name || "Speler")}${pid===currentPlayerId ? " (jij)" : ""}</div>
+      <div>${esc(answerText)}</div>
+      <div>${icon}</div>
+    </div>`;
+  }).join("") || "Nog geen spelers.";
+}
+
+// Override renderScore overal naar realtime versie
+renderScore = renderScoreRealtime;
+
+// Na insturen direct naar live scorebord van huidige ronde
+submitAnswer = function(){
+  if(!activeRound?.id) return;
+
+  const answer = document.getElementById("answerInput").value || "";
+
+  db.ref("rooms/" + currentRoomCode + "/answers/" + activeRound.id + "/" + currentPlayerId)
+    .set({
+      answer: answer,
+      submittedAt: firebase.database.ServerValue.TIMESTAMP
+    })
+    .then(() => {
+      const input = document.getElementById("answerInput");
+      const btn = document.getElementById("submitAnswerBtn");
+      const status = document.getElementById("answerStatus");
+
+      if(input) input.disabled = true;
+      if(btn) btn.disabled = true;
+      if(status) status.textContent = "🔒 Antwoord ingeleverd.";
+
+      return db.ref("rooms/" + currentRoomCode).once("value");
+    })
+    .then(s => {
+      renderScoreRealtime(s.val() || {});
+      showScreen("screenScore");
+    })
+    .catch(e => alert("Antwoord opslaan mislukt: " + e.message));
+};
+
+// Player listener: tijdens answering naar scorebord als jij al antwoord hebt gegeven
+listenPlayer = function(){
+  db.ref("rooms/" + currentRoomCode).on("value", s => {
+    const room = s.val() || {};
+    const r = room.currentRound || {};
+    activeRound = r;
+
+    if(r.id) clearRealtimeRoundUi(r.id);
+
+    renderLobby(room);
+
+    if(!r.id){
+      showScreen("screenLobby");
+      return;
+    }
+
+    if(r.status === "picking"){
+      if(typeof renderPlayerPickerFixed === "function") renderPlayerPickerFixed(r);
+      else renderPlayerPicker(r);
+      showScreen("screenPicker");
+      return;
+    }
+
+    if(r.status === "ready"){
+      renderColor(r);
+      showScreen("screenColor");
+      return;
+    }
+
+    if(r.status === "answering"){
+      if(playerHasAnsweredCurrentRound(room, r)){
+        renderScoreRealtime(room);
+        showScreen("screenScore");
+      }else{
+        renderAnswer(room, r);
+        showScreen("screenAnswer");
+      }
+      return;
+    }
+
+    if(r.status === "locked"){
+      renderScoreRealtime(room);
+      showScreen("screenScore");
+      return;
+    }
+
+    if(r.status === "judged"){
+      renderScoreRealtime(room);
+
+      const me = room.players?.[currentPlayerId] || {};
+      const good = room.correct?.[r.id]?.[currentPlayerId] === true;
+      const picked = me.lastPickedRound === r.id;
+
+      if(good && !picked){
+        renderPick(room, r);
+        showScreen("screenPick");
+      }else{
+        showScreen("screenScore");
+      }
+    }
+  });
+
+  listenBingo(currentRoomCode);
+};
+
+// Rebind submit knop naar nieuwe functie
+setTimeout(() => {
+  const btn = document.getElementById("submitAnswerBtn");
+  if(btn){
+    const fresh = btn.cloneNode(true);
+    btn.parentNode.replaceChild(fresh, btn);
+    fresh.addEventListener("click", submitAnswer);
+  }
+}, 500);
+
+
+/* =========================
+   V4.3 ANTWOORDVELD LEEG BIJ NIEUWE RONDE
+   ========================= */
+
+let answerInputRoundIdV43 = "";
+
+function resetAnswerInputForRoundV43(roundId){
+  if(!roundId) return;
+
+  if(answerInputRoundIdV43 !== roundId){
+    answerInputRoundIdV43 = roundId;
+
+    const input = document.getElementById("answerInput");
+    const btn = document.getElementById("submitAnswerBtn");
+    const status = document.getElementById("answerStatus");
+
+    if(input){
+      input.value = "";
+      input.disabled = false;
+    }
+    if(btn) btn.disabled = false;
+    if(status) status.textContent = "";
+  }
+}
+
+// Override renderAnswer zodat oude antwoord nooit blijft staan
+renderAnswer = function(room, r){
+  resetAnswerInputForRoundV43(r.id);
+
+  const info = document.getElementById("answerRoundInfo");
+  if(info) info.textContent = `${r.colorEmoji || ""} ${r.colorName || ""} — ${r.category || ""}`;
+
+  const input = document.getElementById("answerInput");
+  const btn = document.getElementById("submitAnswerBtn");
+  const status = document.getElementById("answerStatus");
+
+  const existing = room.answers && room.answers[r.id] ? room.answers[r.id][currentPlayerId] : null;
+
+  if(existing){
+    if(input){
+      input.value = existing.answer || "";
+      input.disabled = true;
+    }
+    if(btn) btn.disabled = true;
+    if(status) status.textContent = "🔒 Antwoord ingeleverd.";
+  }else{
+    if(input){
+      input.value = "";
+      input.disabled = false;
+    }
+    if(btn) btn.disabled = false;
+    if(status) status.textContent = "Typ je antwoord.";
+  }
+
+  clearInterval(screenTimer);
+  screenTimer = setInterval(() => {
+    const left = Math.max(0, Math.ceil(((r.deadlineMs || 0) - Date.now()) / 1000));
+    const timer = document.getElementById("timerBox");
+    if(timer) timer.textContent = "⏱️ " + left + " sec";
+
+    if(left <= 0){
+      clearInterval(screenTimer);
+      if(input) input.disabled = true;
+      if(btn) btn.disabled = true;
+      if(status) status.textContent = "🔒 Tijd voorbij.";
+    }
+  }, 300);
+};
+
+// Extra zekerheid: bij status ready/picking ook invulveld leegmaken voor nieuwe ronde
+const oldListenPlayerV43 = listenPlayer;
+listenPlayer = function(){
+  db.ref("rooms/" + currentRoomCode).on("value", s => {
+    const room = s.val() || {};
+    const r = room.currentRound || {};
+    activeRound = r;
+
+    if(r.id && r.id !== answerInputRoundIdV43 && (r.status === "picking" || r.status === "ready")){
+      resetAnswerInputForRoundV43(r.id);
+    }
+
+    renderLobby(room);
+
+    if(!r.id){
+      showScreen("screenLobby");
+      return;
+    }
+
+    if(r.status === "picking"){
+      if(typeof renderPlayerPickerFixed === "function") renderPlayerPickerFixed(r);
+      else renderPlayerPicker(r);
+      showScreen("screenPicker");
+      return;
+    }
+
+    if(r.status === "ready"){
+      renderColor(r);
+      showScreen("screenColor");
+      return;
+    }
+
+    if(r.status === "answering"){
+      if(typeof playerHasAnsweredCurrentRound === "function" && playerHasAnsweredCurrentRound(room, r)){
+        renderScore(room);
+        showScreen("screenScore");
+      }else{
+        renderAnswer(room, r);
+        showScreen("screenAnswer");
+      }
+      return;
+    }
+
+    if(r.status === "locked"){
+      renderScore(room);
+      showScreen("screenScore");
+      return;
+    }
+
+    if(r.status === "judged"){
+      renderScore(room);
+      const me = room.players?.[currentPlayerId] || {};
+      const good = room.correct?.[r.id]?.[currentPlayerId] === true;
+      const picked = me.lastPickedRound === r.id;
+
+      if(good && !picked){
+        renderPick(room, r);
+        showScreen("screenPick");
+      }else{
+        showScreen("screenScore");
+      }
+    }
+  });
+
+  listenBingo(currentRoomCode);
+};
+
+
+/* =========================
+   V4.4 ZELFDE SCHERM
+   Scorebord blijft altijd staan.
+   Antwoordveld wordt vervangen door juiste antwoord.
+   ========================= */
+
+let activeScoreRoundIdV44 = "";
+
+function renderDynamicAnswerBlockV44(room){
+  const r = room.currentRound || {};
+  const block = document.getElementById("dynamicAnswerBlock");
+  if(!block || !r.id) return;
+
+  const ownAnswer = room.answers && room.answers[r.id] ? room.answers[r.id][currentPlayerId] : null;
+  const ans = r.correctAnswer;
+
+  // Timer klaar / locked / judged: antwoordveld weg, juiste antwoord op dezelfde plek
+  if(ans && (r.status === "locked" || r.status === "judged")){
+    block.innerHTML =
+      `<h3>🐵 Juiste antwoord</h3>
+       <p>🎵 <strong>${esc(ans.track || "-")}</strong></p>
+       <p>👤 ${esc(ans.artist || "-")}</p>
+       <p>📅 ${esc(ans.year || "-")}</p>
+       <p>💿 ${esc(ans.album || "-")}</p>`;
+    return;
+  }
+
+  // Na insturen, maar timer loopt nog
+  if(ownAnswer){
+    block.innerHTML =
+      `<h3>🔒 Antwoord ingeleverd</h3>
+       <p class="submitted">Jouw antwoord: ${esc(ownAnswer.answer || "Leeg antwoord")}</p>
+       <p class="small">Wachten tot de tijd voorbij is...</p>`;
+    return;
+  }
+
+  // Tijdens answering nog geen antwoord: compact invoerveld in hetzelfde scherm
+  if(r.status === "answering"){
+    block.innerHTML =
+      `<h3>✍️ Vul je antwoord in</h3>
+       <p class="small">${esc(r.colorEmoji || "")} ${esc(r.colorName || "")} — ${esc(r.category || "")}</p>
+       <div id="scoreTimerBox" class="timer">⏱️ --</div>
+       <div class="compactInputRow">
+         <input id="scoreAnswerInput" placeholder="Typ je antwoord">
+         <button id="scoreSubmitAnswerBtn">Verstuur antwoord</button>
+       </div>`;
+
+    const btn = document.getElementById("scoreSubmitAnswerBtn");
+    if(btn){
+      btn.addEventListener("click", () => {
+        const val = document.getElementById("scoreAnswerInput")?.value || "";
+        submitAnswerValueV44(val);
+      });
+    }
+    startScoreTimerV44(r);
+    return;
+  }
+
+  // Ready/picking fallback
+  block.innerHTML =
+    `<h3>🎵 Wachten op muziek</h3>
+     <p class="small">${esc(r.colorEmoji || "")} ${esc(r.colorName || "")} ${r.category ? "— " + esc(r.category) : ""}</p>`;
+}
+
+function startScoreTimerV44(r){
+  clearInterval(window.__scoreTimerV44);
+  window.__scoreTimerV44 = setInterval(() => {
+    const left = Math.max(0, Math.ceil(((r.deadlineMs || 0) - Date.now()) / 1000));
+    const el = document.getElementById("scoreTimerBox");
+    if(el) el.textContent = "⏱️ " + left + " sec";
+    if(left <= 0) clearInterval(window.__scoreTimerV44);
+  }, 300);
+}
+
+function submitAnswerValueV44(value){
+  if(!activeRound?.id) return;
+
+  db.ref("rooms/" + currentRoomCode + "/answers/" + activeRound.id + "/" + currentPlayerId)
+    .set({
+      answer: value || "",
+      submittedAt: firebase.database.ServerValue.TIMESTAMP
+    })
+    .catch(e => alert("Antwoord opslaan mislukt: " + e.message));
+}
+
+function renderScoreV44(room){
+  const r = room.currentRound || {};
+  if(!r.id) return;
+
+  renderDynamicAnswerBlockV44(room);
+
+  const players = room.players || {};
+  const answers = room.answers && room.answers[r.id] ? room.answers[r.id] : {};
+  const correct = room.correct && room.correct[r.id] ? room.correct[r.id] : {};
+
+  const score = document.getElementById("playerScoreboard");
+  if(!score) return;
+
+  score.innerHTML = Object.entries(players).map(([pid,p]) => {
+    const hasAnswer = answers[pid] && typeof answers[pid].answer !== "undefined";
+    const answerText = hasAnswer && String(answers[pid].answer).trim()
+      ? answers[pid].answer
+      : (hasAnswer ? "Leeg antwoord" : "Nog niet ingevuld");
+
+    let st = undefined;
+    if(r.status === "judged") st = correct[pid];
+
+    const cls = st === true ? "scoreGood" : st === false ? "scoreBad" : "scorePending";
+    const icon = st === true ? "🐵" : st === false ? "❌" : (hasAnswer ? "📝" : "⏳");
+
+    return `<div class="scoreCard ${cls}">
+      <div class="scoreName" onclick="showOther('${pid}')">${esc(p.name || "Speler")}${pid===currentPlayerId ? " (jij)" : ""}</div>
+      <div>${esc(answerText)}</div>
+      <div>${icon}</div>
+    </div>`;
+  }).join("") || "Nog geen spelers.";
+}
+
+// Score-scherm wordt nu ook gebruikt tijdens answering
+renderScore = renderScoreV44;
+
+submitAnswer = function(){
+  const val = document.getElementById("answerInput")?.value || "";
+  submitAnswerValueV44(val);
+};
+
+// Nieuwe listener: tijdens answering altijd score-scherm tonen.
+// Als je nog niet hebt ingevuld, staat antwoordveld boven scorebord.
+// Na invullen verdwijnt dat veld en blijft scorebord staan.
+listenPlayer = function(){
+  db.ref("rooms/" + currentRoomCode).on("value", s => {
+    const room = s.val() || {};
+    const r = room.currentRound || {};
+    activeRound = r;
+
+    renderLobby(room);
+
+    if(!r.id){
+      showScreen("screenLobby");
+      return;
+    }
+
+    if(r.status === "picking"){
+      if(typeof renderPlayerPickerFixed === "function") renderPlayerPickerFixed(r);
+      else renderPlayerPicker(r);
+      showScreen("screenPicker");
+      return;
+    }
+
+    if(r.status === "ready"){
+      renderColor(r);
+      showScreen("screenColor");
+      return;
+    }
+
+    if(r.status === "answering"){
+      renderScoreV44(room);
+      showScreen("screenScore");
+      return;
+    }
+
+    if(r.status === "locked"){
+      renderScoreV44(room);
+      showScreen("screenScore");
+      return;
+    }
+
+    if(r.status === "judged"){
+      renderScoreV44(room);
+
+      const me = room.players?.[currentPlayerId] || {};
+      const good = room.correct?.[r.id]?.[currentPlayerId] === true;
+      const picked = me.lastPickedRound === r.id;
+
+      if(good && !picked){
+        renderPick(room, r);
+        showScreen("screenPick");
+      }else{
+        showScreen("screenScore");
+      }
+    }
+  });
+
+  listenBingo(currentRoomCode);
+};
+
+// Rebind oude submit voor zekerheid
+setTimeout(() => {
+  const btn = document.getElementById("submitAnswerBtn");
+  if(btn){
+    const fresh = btn.cloneNode(true);
+    btn.parentNode.replaceChild(fresh, btn);
+    fresh.addEventListener("click", submitAnswer);
+  }
+}, 500);
+
 
 /* =========================
    V5 COMPACT 2x2 DASHBOARD
@@ -4419,21 +5351,24 @@ document.addEventListener("click", function(e){
 });
 
 
+
+
 /* =========================
-   V72 CLEAN FINAL LAYER
-   Doel:
-   - 🎤 Host / 🎮 Speler
-   - copy knop in dynamische kamerbox
-   - geen discobal
-   - rustige BB kleurkiezer
+   V73 GOEDE APP FIX
    ========================= */
 (function(){
   function q(id){ return document.getElementById(id); }
+  function isPlayer(){ return !!new URLSearchParams(location.search).get("room"); }
 
-  function setModeBadgeV72(){
-    const isPlayer = !!new URLSearchParams(location.search).get("room");
+  function setModeAndVisibilityV73(){
     const mt = q("modeText");
-    if(mt) mt.textContent = isPlayer ? "🎮 Speler" : "🎤 Host";
+    if(mt) mt.textContent = isPlayer() ? "🎮 Speler" : "🎤 Host";
+
+    if(isPlayer()){
+      q("hostApp")?.classList.add("hidden");
+      q("playerApp")?.classList.remove("hidden");
+      document.body.classList.add("playerMode");
+    }
   }
 
   window.copyRoomLink = function(){
@@ -4468,24 +5403,6 @@ document.addEventListener("click", function(e){
     }
   });
 
-  window.bbPickerHTMLV72 = function(){
-    return `<div class="bbPickerV72">
-      <img src="bb_logo_purple.png" class="bbPickerLogoV72" alt="Bingo Beats">
-      <div class="bbPickerTitleV72">🐵 BB-aap kiest een kleur...</div>
-      <div class="bbPickerDotsV72">
-        <span style="--c:#FFCC33"></span>
-        <span style="--c:#00D4C7"></span>
-        <span style="--c:#FF8A1F"></span>
-        <span style="--c:#7ED957"></span>
-        <span style="--c:#FF5A5F"></span>
-      </div>
-      <div class="bbPickerSmallV72">Nog even spannend...</div>
-    </div>`;
-  };
-
-  pickerHTML = function(){ return window.bbPickerHTMLV72(); };
-  sharedPickerHTML = function(){ return window.bbPickerHTMLV72(); };
-
   if(typeof hbRenderRoomBoxV7B === "function"){
     hbRenderRoomBoxV7B = function(code){
       const box = q("roomBox");
@@ -4493,113 +5410,86 @@ document.addEventListener("click", function(e){
       const link = location.origin + location.pathname + "?room=" + code;
       box.classList.remove("hidden");
       box.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 126px;gap:14px;align-items:center">
-          <div>
-            <div style="font-size:12px;opacity:.75;font-weight:900;margin-bottom:5px">SPELCODE</div>
-            <div style="font-size:42px;font-weight:900;color:#7ED957;letter-spacing:3px;line-height:1">${esc(code)}</div>
-            <input id="joinLink" readonly value="${esc(link)}" style="margin-top:10px">
+        <div class="hostRoomGridV73">
+          <div class="hostRoomCodeV73">
+            <div class="hostRoomLabelV73">SPELCODE</div>
+            <div class="hostRoomCodeTextV73">${esc(code)}</div>
+          </div>
+          <div class="hostRoomLinkV73">
+            <div class="hostRoomLabelV73">DEEL DE LINK</div>
+            <input id="joinLink" readonly value="${esc(link)}">
             <button id="copyRoomLinkBtn" type="button" class="copyRoomLinkBtn">📋 Kopieer link</button>
           </div>
-          <img alt="QR code" src="${hbQrV7B(link)}" style="width:126px;height:126px;background:white;border-radius:12px;padding:6px">
+          <img class="hostQrV73" alt="QR code" src="${hbQrV7B(link)}">
         </div>`;
     };
   }
 
-  renderPlayerPicker = function(round){
-    const area = q("playerPickerArea") || q("dashPickerArea");
-    if(area) area.innerHTML = window.bbPickerHTMLV72();
+  if(typeof showRoom === "function" && !window.__showRoomV73Wrapped){
+    window.__showRoomV73Wrapped = true;
+    const oldShowRoom = showRoom;
+    showRoom = function(){
+      const out = oldShowRoom.apply(this, arguments);
+      const code = (typeof currentRoomCode !== "undefined" && currentRoomCode) ? currentRoomCode : localStorage.getItem("hb_host_room");
+      if(code && typeof hbRenderRoomBoxV7B === "function") setTimeout(() => hbRenderRoomBoxV7B(code), 30);
+      return out;
+    };
+  }
+
+  window.bbPickerHTMLV73 = function(){
+    return `<div class="bbPickerV73">
+      <img src="bb_logo_purple.png" class="bbPickerLogoV73" alt="Bingo Beats">
+      <div class="bbPickerTitleV73">🐵 BB-aap kiest een kleur...</div>
+      <div class="bbPickerDotsV73">
+        <span style="--c:#FFCC33"></span>
+        <span style="--c:#00D4C7"></span>
+        <span style="--c:#FF8A1F"></span>
+        <span style="--c:#7ED957"></span>
+        <span style="--c:#FF5A5F"></span>
+      </div>
+      <div class="bbPickerSmallV73">Nog even spannend...</div>
+    </div>`;
   };
 
-  renderPlayerPickerFixed = function(round){
-    const area = q("playerPickerArea") || q("dashPickerArea");
-    if(area) area.innerHTML = window.bbPickerHTMLV72();
-  };
+  if(typeof pickerHTML === "function") pickerHTML = function(){ return window.bbPickerHTMLV73(); };
+  if(typeof sharedPickerHTML === "function") sharedPickerHTML = function(){ return window.bbPickerHTMLV73(); };
+
+  if(typeof renderPlayerPicker === "function"){
+    renderPlayerPicker = function(round){
+      const area = q("playerPickerArea") || q("dashPickerArea");
+      if(area) area.innerHTML = window.bbPickerHTMLV73();
+    };
+  }
+  if(typeof renderPlayerPickerFixed === "function"){
+    renderPlayerPickerFixed = function(round){
+      const area = q("playerPickerArea") || q("dashPickerArea");
+      if(area) area.innerHTML = window.bbPickerHTMLV73();
+    };
+  }
 
   if(typeof renderCompactPicker === "function"){
     renderCompactPicker = function(room, r){
       const area = q("dashPickerArea");
       if(!area) return;
-
       if(r && r.status === "picking"){
-        area.innerHTML = window.bbPickerHTMLV72();
+        area.innerHTML = window.bbPickerHTMLV73();
         return;
       }
-
       if(r && (r.colorName || r.category)){
         const map = {yellow:"#FFCC33",pink:"#00D4C7",purple:"#FF8A1F",blue:"#7ED957",green:"#FF5A5F"};
-        area.innerHTML = `<div class="bbPickedV72">
-          <div class="bbPickedBallV72" style="background:${map[r.colorKey] || "#FFCC33"}"></div>
-          <div class="bbPickedNameV72">${esc(r.colorName || "")}</div>
-          <div class="bbPickedCatV72">${esc(r.category || "")}</div>
+        area.innerHTML = `<div class="bbPickedV73">
+          <div class="bbPickedBallV73" style="background:${map[r.colorKey] || "#FFCC33"}"></div>
+          <div class="bbPickedNameV73">${esc(r.colorName || "")}</div>
+          <div class="bbPickedCatV73">${esc(r.category || "")}</div>
         </div>`;
         return;
       }
-
       area.innerHTML = "Wachten op host...";
     };
   }
 
-  startRoundVisual = function(room){
-    const hostAnswer = q("hostAnswerArea");
-    const playBtn = q("playBtn");
-    const showBtn = q("showAnswerBtn");
-    const pickerArea = q("hostPickerArea");
-
-    if(hostAnswer) hostAnswer.innerHTML = "";
-    if(playBtn){
-      playBtn.disabled = true;
-      playBtn.textContent = "🎵 Speel verborgen nummer";
-    }
-    if(showBtn) showBtn.disabled = true;
-
-    const pickerMarkup = window.bbPickerHTMLV72();
-    if(pickerArea) pickerArea.innerHTML = pickerMarkup;
-
-    currentRoundId = "r_" + Date.now();
-
-    db.ref("rooms/" + room + "/currentRound").set({
-      id: currentRoundId,
-      status: "picking",
-      pickerMode: "bb",
-      pickerMarkup: pickerMarkup,
-      pickerStartedAt: firebase.database.ServerValue.TIMESTAMP,
-      seconds: Number(q("duration")?.value) || 20
-    });
-
-    setTimeout(() => {
-      try{ flash(); }catch(e){}
-      const color = pick(COLORS);
-      const cat = q(color.input)?.value || "Geen categorie";
-
-      if(pickerArea){
-        pickerArea.innerHTML =
-          `<div class="colorDisplay">${color.emoji}<br>${color.name}</div>
-           <div class="categoryDisplay">${esc(cat)}</div>`;
-      }
-
-      db.ref("rooms/" + room + "/currentRound").set({
-        id: currentRoundId,
-        status: "ready",
-        pickerMode: "bb",
-        pickerMarkup: pickerMarkup,
-        colorKey: color.key,
-        colorName: color.name,
-        colorEmoji: color.emoji,
-        category: cat,
-        seconds: Number(q("duration")?.value) || 20
-      });
-
-      if(playBtn) playBtn.disabled = false;
-      if(showBtn) showBtn.disabled = false;
-      q("hostScorePanel")?.classList.remove("hidden");
-
-      const st = q("hostStatus");
-      if(st) st.textContent = "Kleur bekend. Klik nu op Speel verborgen nummer.";
-    }, 3000);
-  };
-
-  document.addEventListener("DOMContentLoaded", setModeBadgeV72);
-  setTimeout(setModeBadgeV72, 250);
-  setTimeout(setModeBadgeV72, 1200);
-  setInterval(setModeBadgeV72, 3000);
+  document.addEventListener("DOMContentLoaded", setModeAndVisibilityV73);
+  setTimeout(setModeAndVisibilityV73, 250);
+  setTimeout(setModeAndVisibilityV73, 1200);
+  setInterval(setModeAndVisibilityV73, 2500);
 })();
