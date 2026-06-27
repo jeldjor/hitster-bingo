@@ -1,7 +1,0 @@
-V70 fixes
-
-- Header toont 🎤 Host.
-- Kopieer-link knop toegevoegd bij kamerlink, ook in de dynamische QR/kamerbox.
-- Discobal verwijderd uit 'Klaar om te spelen'.
-- Speler-dashboard titel aangepast van discobal naar 🎨.
-- Kleurkiezer blijft veilig/simpel zodat app niet crasht.
