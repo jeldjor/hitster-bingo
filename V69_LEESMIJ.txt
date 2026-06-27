@@ -1,7 +1,0 @@
-V69 fixed
-
-Gebaseerd op de werkende V67_SAFE.
-Aangepast:
-- Host badge is nu 🎤 Host.
-- Kopieer-link knop bij kamerlink toegevoegd, ook in de dynamische QR/kamerbox.
-- Geen kleurkiezer of andere grote wijzigingen.
