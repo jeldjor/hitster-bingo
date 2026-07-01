@@ -6073,3 +6073,60 @@ body.playerMode .bbStageShell .bbStageLogo{display:none!important}
 .bbWheelInlineV110{
   background:radial-gradient(circle at 50% 20%,rgba(255,204,51,.12),transparent 34%),linear-gradient(180deg,#07030f,#100518) !important;
 }
+
+/* =========================
+   V119 - fixed 60-vaks rad: geen nabeweging/doorspringen
+   ========================= */
+.bbWheelFullCardV92.v119 .bbWheelFullDiscV92.bbWheel60V119{
+  animation:bbWheelFullSpinV119 8s cubic-bezier(.10,.82,.12,1) forwards !important;
+}
+.bbWheelFullDiscV92.bbWheel60V119::before{
+  background:repeating-conic-gradient(from -90deg,rgba(255,255,255,.38) 0 .65deg,transparent .65deg 6deg) !important;
+}
+@keyframes bbWheelFullSpinV119{
+  0%{transform:rotate(0deg);filter:blur(.15px)}
+  18%{filter:blur(1.1px)}
+  70%{filter:blur(.35px)}
+  100%{transform:rotate(calc(4320deg + var(--stop)));filter:blur(0)}
+}
+
+
+/* =========================
+   V120 - Show kleurenrad: host + speler zelfde rad
+   ========================= */
+.bbWheelFullCardV92.v119{
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  padding:clamp(10px,2.5vw,24px) !important;
+}
+.bbWheelFullCardV92.v119 .bbWheelFullDiscV92.bbWheel60V119{
+  animation:bbWheelFullSpinV120 16s cubic-bezier(.08,.78,.08,1) forwards !important;
+}
+.bbWheelFullCenterV92.bbWheelHubNoLogo{
+  inset:39% !important;
+  background:radial-gradient(circle,rgba(255,255,255,.96) 0%,rgba(255,230,180,.94) 42%,rgba(30,20,10,.96) 100%) !important;
+  border:clamp(2px,.55vw,5px) solid rgba(255,255,255,.92) !important;
+  box-shadow:0 0 24px rgba(255,255,255,.35), inset 0 0 18px rgba(0,0,0,.25) !important;
+  color:transparent !important;
+  text-shadow:none !important;
+  font-size:0 !important;
+}
+.bbWheelFullCardV92.v119 .bbWheelFullWaitV92{
+  margin-top:clamp(10px,2vh,18px) !important;
+  background:rgba(255,255,255,.075) !important;
+  border:1px solid rgba(255,255,255,.12) !important;
+  backdrop-filter:blur(8px) !important;
+}
+.bbWheelInlineV110 .bbWheelFullCardV92.v119{
+  width:min(94vw,720px) !important;
+  height:auto !important;
+  min-height:0 !important;
+}
+@keyframes bbWheelFullSpinV120{
+  0%{transform:rotate(0deg);filter:blur(.18px)}
+  12%{filter:blur(1.25px)}
+  42%{filter:blur(.75px)}
+  72%{filter:blur(.28px)}
+  100%{transform:rotate(calc(7200deg + var(--stop)));filter:blur(0)}
+}

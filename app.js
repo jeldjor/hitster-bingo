@@ -626,7 +626,7 @@ function listenBingo(room){if(!room)return;db.ref("rooms/"+room+"/bingos").off()
       <div class="bbWheelFullSubV92">Het rad draait...</div>
       <div class="bbWheelFullPointerV92"></div>
       <div class="bbWheelFullDiscV92" style="--stop:${deg}deg">
-        <div class="bbWheelFullCenterV92">BB</div>
+        <div class="bbWheelFullCenterV92 bbWheelHubNoLogo"></div>
         <span class="seg seg1">GOUD</span>
         <span class="seg seg2">AQUA</span>
         <span class="seg seg3">ORANJE</span>
@@ -2528,7 +2528,7 @@ function listenBingo(room){if(!room)return;db.ref("rooms/"+room+"/bingos").off()
     return `<div class="bbWheelFullCardV92 v110 v118" data-key="${E(key)}">
       <div class="bbWheelFullPointerV92"></div>
       <div class="bbWheelFullDiscV92 bbWheelManySegmentsV118" style="--stop:${stop}deg;--chosen:${HEXV[key]||'#FFCC33'};background:${wheelGradientV118()}">
-        <div class="bbWheelFullCenterV92">BB</div>
+        <div class="bbWheelFullCenterV92 bbWheelHubNoLogo"></div>
       </div>
       <div class="bbWheelFullWaitV92">Categorie wordt gekozen...</div>
     </div>`;
@@ -3288,4 +3288,188 @@ function listenBingo(room){if(!room)return;db.ref("rooms/"+room+"/bingos").off()
   lockRound=function(){
     if(!currentRoomCode)return;publishAnswer().then(()=>runJury117(currentRoomCode,null)).then(res=>{const has=!!res?.reviews?.length;return db.ref('rooms/'+currentRoomCode+'/currentRound').update({status:'locked'}).then(()=>setTimeout(()=>db.ref('rooms/'+currentRoomCode+'/currentRound').update({status:has?'review':'judged'}),2200))}).then(()=>{if(q('hostStatus'))q('hostStatus').textContent='Jury van Bingo Beats heeft de antwoorden beoordeeld.'}).catch(e=>alert('Jury/timer fout: '+(e.message||e)))};
   publishResults=function(){if(!currentRoomCode)return;runJury117(currentRoomCode,'judged').then(()=>{if(q('hostStatus'))q('hostStatus').textContent='Jury-scorebord verzonden.'})};
+})();
+
+/* =========================
+   V119 - NIEUWE FIXED VERSIE
+   - Host en spelers gebruiken exact hetzelfde 60-vaks kleurenrad
+   - Winnaar wordt 1x per ronde vastgelegd als winningIndex
+   - Rad stopt exact op dat vakje en springt daarna niet naar een andere kleur
+   ========================= */
+(function(){
+  const q = id => document.getElementById(id);
+  const E = s => (typeof esc === 'function' ? esc(String(s ?? '')) : String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])));
+
+  const HEX = {yellow:'#FFCC33', pink:'#00D4C7', purple:'#FF8A1F', blue:'#7ED957', green:'#FF5A5F'};
+  const NAME = {yellow:'GOUD', pink:'AQUA', purple:'ORANJE', blue:'LIME', green:'KORAAL'};
+  const EMOJI = {yellow:'🟡', pink:'🩵', purple:'🟠', blue:'🟢', green:'🔴'};
+  const INPUT = {yellow:'cat-yellow', pink:'cat-pink', purple:'cat-purple', blue:'cat-blue', green:'cat-green'};
+
+  // 60 vakjes: 12x per kleur, bewust gemixt zodat het een show-rad blijft.
+  const WHEEL_60 = [
+    'yellow','pink','purple','blue','green','pink','yellow','green','purple','blue',
+    'green','yellow','pink','blue','purple','yellow','green','purple','pink','blue',
+    'purple','green','yellow','pink','blue','yellow','purple','green','blue','pink',
+    'green','yellow','pink','purple','blue','pink','green','yellow','blue','purple',
+    'yellow','blue','green','pink','purple','blue','yellow','purple','green','pink',
+    'pink','green','blue','yellow','purple','green','pink','yellow','blue','purple'
+  ];
+  const COUNT = WHEEL_60.length;
+  const SLICE = 360 / COUNT;
+
+  function colorObj(key){
+    const base = (typeof COLORS !== 'undefined' ? COLORS.find(c=>c.key===key) : null) || {};
+    return {key, name:base.name||NAME[key]||'KLEUR', emoji:base.emoji||EMOJI[key]||'', hex:base.hex||HEX[key]||'#FFCC33', input:base.input||INPUT[key]};
+  }
+  function categoryFor(color){
+    try{ return q(color.input)?.value || 'Geen categorie'; }catch(_e){ return 'Geen categorie'; }
+  }
+  function wheelGradient(){
+    return 'conic-gradient(from -90deg,' + WHEEL_60.map((key,i)=>`${HEX[key]} ${(i*SLICE).toFixed(2)}deg ${((i+1)*SLICE).toFixed(2)}deg`).join(',') + ')';
+  }
+  function stopForIndex(index){
+    index = Math.max(0, Math.min(COUNT-1, Number(index)||0));
+    const centerAngle = (index * SLICE) + (SLICE / 2);
+    return -centerAngle;
+  }
+  function randomWinningIndex(){ return Math.floor(Math.random() * COUNT); }
+  function wheelHTML(index){
+    index = Math.max(0, Math.min(COUNT-1, Number(index)||0));
+    const key = WHEEL_60[index] || 'yellow';
+    return `<div class="bbWheelFullCardV92 v110 v118 v119" data-winning-index="${index}" data-key="${E(key)}">
+      <div class="bbWheelFullPointerV92"></div>
+      <div class="bbWheelFullDiscV92 bbWheelManySegmentsV118 bbWheel60V119" style="--stop:${stopForIndex(index)}deg;--chosen:${HEX[key]};background:${wheelGradient()}">
+        <div class="bbWheelFullCenterV92 bbWheelHubNoLogo"></div>
+      </div>
+      <div class="bbWheelFullWaitV92">Categorie wordt gekozen...</div>
+    </div>`;
+  }
+  function resultHTML(color,cat){
+    const hex = color?.hex || HEX[color?.key] || '#FFCC33';
+    return `<div class="bbWheelFullCardV92 result v110 v118 v119" style="--result:${hex}">
+      <div class="bbWheelFullResultDotV92"></div>
+      <div class="bbWheelFullResultNameV92">${E(color?.emoji||'')} ${E(color?.name||'KLEUR')}</div>
+      <div class="bbWheelFullResultCatV92">${E(cat||'')}</div>
+    </div>`;
+  }
+  function ensureOverlay(){
+    let o = q('bbWheelFullOverlayV92');
+    if(!o){ o=document.createElement('div'); o.id='bbWheelFullOverlayV92'; o.className='hidden'; document.body.appendChild(o); }
+    return o;
+  }
+  function showWheel(index){
+    const o = ensureOverlay();
+    o.innerHTML = wheelHTML(index);
+    o.classList.remove('hidden'); o.classList.add('show');
+    o.style.display='flex'; o.style.zIndex='2147483647';
+  }
+  function showResult(color,cat){
+    const o = ensureOverlay();
+    o.innerHTML = resultHTML(color,cat);
+    o.classList.remove('hidden'); o.classList.add('show');
+    o.style.display='flex'; o.style.zIndex='2147483647';
+  }
+  function hideWheel(){
+    const o = q('bbWheelFullOverlayV92');
+    if(o){ o.classList.remove('show'); o.classList.add('hidden'); o.style.display='none'; }
+  }
+
+  window.__bbWheelV119 = {showWheel,showResult,hideWheel,wheelHTML,resultHTML,WHEEL_60};
+  window.__bbWheelV110 = {showWheelV110:(keyOrIndex)=>showWheel(Number.isFinite(Number(keyOrIndex))?Number(keyOrIndex):0),showResultV110:showResult,hideWheelV110:hideWheel,wheelHTMLV110:(keyOrIndex)=>wheelHTML(Number.isFinite(Number(keyOrIndex))?Number(keyOrIndex):0)};
+
+  if(typeof startRoundVisual === 'function'){
+    startRoundVisual = function(room){
+      if(q('hostAnswerArea')) q('hostAnswerArea').innerHTML = '';
+      if(q('playBtn')){ q('playBtn').disabled = true; q('playBtn').textContent = '🎵 Nummer start zo...'; }
+      if(q('showAnswerBtn')) q('showAnswerBtn').disabled = true;
+
+      const winningIndex = randomWinningIndex();
+      const colorKey = WHEEL_60[winningIndex];
+      const color = colorObj(colorKey);
+      const cat = categoryFor(color);
+      currentRoundId = 'r_' + Date.now();
+
+      showWheel(winningIndex);
+      if(q('hostPickerArea')) q('hostPickerArea').innerHTML = wheelHTML(winningIndex);
+
+      db.ref('rooms/'+room+'/currentRound').set({
+        id: currentRoundId,
+        status: 'picking',
+        pickerMode: 'wheelV119',
+        wheelSegmentCount: COUNT,
+        winningIndex: winningIndex,
+        pendingColorKey: color.key,
+        pendingColorName: color.name,
+        pendingCategory: cat,
+        pickerStartedAt: firebase.database.ServerValue.TIMESTAMP,
+        seconds: Number(q('duration')?.value)||20
+      });
+
+      setTimeout(()=>{
+        try{ if(typeof flash === 'function') flash(); }catch(_e){}
+        showResult(color,cat);
+        if(q('hostPickerArea')) q('hostPickerArea').innerHTML = resultHTML(color,cat);
+        const ends = Date.now()+3000;
+        db.ref('rooms/'+room+'/currentRound').set({
+          id: currentRoundId,
+          status: 'precount',
+          pickerMode: 'wheelV119',
+          wheelSegmentCount: COUNT,
+          winningIndex: winningIndex,
+          colorKey: color.key,
+          colorName: color.name,
+          colorEmoji: color.emoji,
+          category: cat,
+          seconds: Number(q('duration')?.value)||20,
+          precountStartedAt: firebase.database.ServerValue.TIMESTAMP,
+          precountEndsAt: ends
+        }).then(()=>{
+          q('hostScorePanel')?.classList.remove('hidden');
+          if(q('hostStatus')) q('hostStatus').textContent = 'Categorie gekozen. 3-2-1... daarna start het nummer.';
+          setTimeout(()=>{ hideWheel(); if(typeof playHidden === 'function') playHidden(); },3000);
+        });
+      },16000);
+    };
+  }
+
+  const previousRender = (typeof renderCompactDashboard === 'function') ? renderCompactDashboard : null;
+  renderCompactDashboard = function(room,r){
+    if(r && r.status === 'picking'){
+      const idx = Number.isFinite(Number(r.winningIndex)) ? Number(r.winningIndex) : 0;
+      const root = q('screenDashboard');
+      if(root){
+        document.body.classList.add('bbStageMode');
+        root.className = 'compactDashboard bbStageDashboard stageWheelV110 stageWheelV119';
+        root.innerHTML = `<section class="bbWheelInlineV110">${wheelHTML(idx)}</section>`;
+      }
+      showWheel(idx);
+      return;
+    }
+    if(r && r.status !== 'picking') hideWheel();
+    return previousRender ? previousRender(room,r) : null;
+  };
+
+  let listeningRoom = '';
+  function activeRoom(){ return (currentRoomCode || new URLSearchParams(location.search).get('room') || localStorage.hb_player_room || '').toUpperCase(); }
+  function attachListener(){
+    try{
+      if(!db) return;
+      const room = activeRoom();
+      if(!room || room === listeningRoom) return;
+      if(listeningRoom) db.ref('rooms/'+listeningRoom+'/currentRound').off('value.bbV119Wheel');
+      listeningRoom = room;
+      db.ref('rooms/'+room+'/currentRound').on('value.bbV119Wheel', s=>{
+        const r = s.val() || {};
+        if(r.status === 'picking'){
+          const idx = Number.isFinite(Number(r.winningIndex)) ? Number(r.winningIndex) : 0;
+          showWheel(idx);
+          if(document.body.classList.contains('hostMode') && q('hostPickerArea')) q('hostPickerArea').innerHTML = wheelHTML(idx);
+        }else{
+          hideWheel();
+        }
+      });
+    }catch(_e){}
+  }
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(attachListener,250));
+  setInterval(attachListener,700);
 })();
