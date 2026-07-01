@@ -3473,3 +3473,158 @@ function listenBingo(room){if(!room)return;db.ref("rooms/"+room+"/bingos").off()
   document.addEventListener('DOMContentLoaded',()=>setTimeout(attachListener,250));
   setInterval(attachListener,700);
 })();
+
+/* =========================
+   V121 - FIXED NIEUWE 60-VAKS RAD
+   - Host en spelers gebruiken exact dezelfde renderfunctie
+   - Oude V91/V92/V110 wheel-calls worden doorgestuurd naar dit nieuwe rad
+   - winningIndex blijft vast per ronde, dus geen doorspringen naar andere kleur
+   ========================= */
+(function(){
+  const q=id=>document.getElementById(id);
+  const E=s=>(typeof esc==='function'?esc(String(s??'')):String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])));
+  const HEX={yellow:'#FFCC33',pink:'#00D4C7',purple:'#FF8A1F',blue:'#7ED957',green:'#FF5A5F'};
+  const NAME={yellow:'GOUD',pink:'AQUA',purple:'ORANJE',blue:'LIME',green:'KORAAL'};
+  const EMOJI={yellow:'🟡',pink:'🩵',purple:'🟠',blue:'🟢',green:'🔴'};
+  const INPUT={yellow:'cat-yellow',pink:'cat-pink',purple:'cat-purple',blue:'cat-blue',green:'cat-green'};
+  const WHEEL=[
+    'yellow','pink','purple','blue','green','pink','yellow','green','purple','blue',
+    'green','yellow','pink','blue','purple','yellow','green','purple','pink','blue',
+    'purple','green','yellow','pink','blue','yellow','purple','green','blue','pink',
+    'green','yellow','pink','purple','blue','pink','green','yellow','blue','purple',
+    'yellow','blue','green','pink','purple','blue','yellow','purple','green','pink',
+    'pink','green','blue','yellow','purple','green','pink','yellow','blue','purple'
+  ];
+  const COUNT=WHEEL.length;
+  const SLICE=360/COUNT;
+  let lockedIndex=null;
+  let lockedRoundId='';
+
+  function normIndex(i){i=Number(i);return Number.isFinite(i)?Math.max(0,Math.min(COUNT-1,Math.round(i))):0;}
+  function indicesForKey(key){return WHEEL.map((k,i)=>k===key?i:-1).filter(i=>i>=0);}
+  function indexForKey(key){
+    if(lockedIndex!==null && WHEEL[lockedIndex]===key) return lockedIndex;
+    const arr=indicesForKey(key);
+    return arr.length?arr[Math.floor(arr.length/2)]:0;
+  }
+  function colorObj(key){
+    const base=(typeof COLORS!=='undefined'?COLORS.find(c=>c.key===key):null)||{};
+    return {key,name:base.name||NAME[key]||'KLEUR',emoji:base.emoji||EMOJI[key]||'',hex:base.hex||HEX[key]||'#FFCC33',input:base.input||INPUT[key]};
+  }
+  function categoryFor(color){try{return q(color.input)?.value||'Geen categorie';}catch(_e){return'Geen categorie';}}
+  function gradient(){return 'conic-gradient(from -90deg,'+WHEEL.map((key,i)=>`${HEX[key]} ${(i*SLICE).toFixed(2)}deg ${((i+1)*SLICE).toFixed(2)}deg`).join(',')+')';}
+  function stopForIndex(index){
+    index=normIndex(index);
+    const center=(index*SLICE)+(SLICE/2);
+    return -center;
+  }
+  function htmlWheel(index){
+    index=normIndex(index);
+    const key=WHEEL[index]||'yellow';
+    return `<div class="bbWheelFullCardV92 bbWheelCardV121" data-winning-index="${index}" data-key="${E(key)}">
+      <div class="bbWheelFullPointerV92 bbWheelPointerV121"></div>
+      <div class="bbWheelFullDiscV92 bbWheelDiscV121" style="--stop:${stopForIndex(index)}deg;--chosen:${HEX[key]};background:${gradient()}">
+        <div class="bbWheelFullCenterV92 bbWheelHubNoLogo bbWheelHubV121"></div>
+      </div>
+      <div class="bbWheelFullWaitV92 bbWheelWaitV121">Categorie wordt gekozen...</div>
+    </div>`;
+  }
+  function htmlResult(color,cat){
+    const hex=color?.hex||HEX[color?.key]||'#FFCC33';
+    return `<div class="bbWheelFullCardV92 result bbWheelCardV121 bbWheelResultCardV121" style="--result:${hex}">
+      <div class="bbWheelFullResultDotV92"></div>
+      <div class="bbWheelFullResultNameV92">${E(color?.emoji||'')} ${E(color?.name||'KLEUR')}</div>
+      <div class="bbWheelFullResultCatV92">${E(cat||'')}</div>
+    </div>`;
+  }
+  function overlay(){let o=q('bbWheelFullOverlayV92');if(!o){o=document.createElement('div');o.id='bbWheelFullOverlayV92';o.className='hidden';document.body.appendChild(o);}return o;}
+  function showIndex(index){
+    index=normIndex(index); lockedIndex=index;
+    const o=overlay(); o.innerHTML=htmlWheel(index); o.classList.remove('hidden'); o.classList.add('show'); o.style.display='flex'; o.style.zIndex='2147483647';
+    return index;
+  }
+  function showKey(key){return showIndex(indexForKey(key));}
+  function showResult(color,cat){
+    const o=overlay(); o.innerHTML=htmlResult(color,cat); o.classList.remove('hidden'); o.classList.add('show'); o.style.display='flex'; o.style.zIndex='2147483647';
+  }
+  function hide(){const o=q('bbWheelFullOverlayV92');if(o){o.classList.remove('show');o.classList.add('hidden');o.style.display='none';}}
+
+  window.__bbWheelFixedV121={showIndex,showKey,showResult,hide,htmlWheel,htmlResult,WHEEL};
+  window.__bbWheelV92={showWheelFull:(x)=>{Number.isFinite(Number(x))?showIndex(Number(x)):showKey(x||'yellow')},showWheelResult:showResult,hideWheelFull:hide};
+  window.__bbWheelV110={showWheelV110:(x)=>{Number.isFinite(Number(x))?showIndex(Number(x)):showKey(x||'yellow')},showResultV110:showResult,hideWheelV110:hide,wheelHTMLV110:(x)=>htmlWheel(Number.isFinite(Number(x))?Number(x):indexForKey(x||'yellow'))};
+  window.__bbWheelV119={showWheel:showIndex,showResult,hideWheel:hide,wheelHTML:htmlWheel,resultHTML:htmlResult,WHEEL_60:WHEEL};
+
+  // Laat ook oude inline pickerHTML nooit meer het oude rad terugzetten.
+  if(typeof pickerHTML==='function') pickerHTML=function(){return htmlWheel(0)};
+
+  if(typeof startRoundVisual==='function'){
+    startRoundVisual=function(room){
+      if(q('hostAnswerArea')) q('hostAnswerArea').innerHTML='';
+      if(q('playBtn')){q('playBtn').disabled=true;q('playBtn').textContent='🎵 Nummer start zo...';}
+      if(q('showAnswerBtn')) q('showAnswerBtn').disabled=true;
+      const winningIndex=Math.floor(Math.random()*COUNT);
+      lockedIndex=winningIndex;
+      const key=WHEEL[winningIndex];
+      const color=colorObj(key);
+      const cat=categoryFor(color);
+      currentRoundId='r_'+Date.now();
+      lockedRoundId=currentRoundId;
+      showIndex(winningIndex);
+      if(q('hostPickerArea')) q('hostPickerArea').innerHTML=htmlWheel(winningIndex);
+      db.ref('rooms/'+room+'/currentRound').set({
+        id:currentRoundId,status:'picking',pickerMode:'wheelV121',wheelSegmentCount:COUNT,winningIndex,
+        pendingColorKey:color.key,pendingColorName:color.name,pendingCategory:cat,
+        pickerStartedAt:firebase.database.ServerValue.TIMESTAMP,seconds:Number(q('duration')?.value)||20
+      });
+      setTimeout(()=>{
+        try{if(typeof flash==='function')flash();}catch(_e){}
+        showResult(color,cat);
+        if(q('hostPickerArea')) q('hostPickerArea').innerHTML=htmlResult(color,cat);
+        const ends=Date.now()+3000;
+        db.ref('rooms/'+room+'/currentRound').set({
+          id:currentRoundId,status:'precount',pickerMode:'wheelV121',wheelSegmentCount:COUNT,winningIndex,
+          colorKey:color.key,colorName:color.name,colorEmoji:color.emoji,category:cat,
+          seconds:Number(q('duration')?.value)||20,precountStartedAt:firebase.database.ServerValue.TIMESTAMP,precountEndsAt:ends
+        }).then(()=>{
+          q('hostScorePanel')?.classList.remove('hidden');
+          if(q('hostStatus')) q('hostStatus').textContent='Categorie gekozen. 3-2-1... daarna start het nummer.';
+          setTimeout(()=>{hide(); if(typeof playHidden==='function')playHidden();},3000);
+        });
+      },16000);
+    };
+  }
+
+  // Speler/host fallback: iedere picking-state forceert hetzelfde vaste index-rad.
+  const prevRender=(typeof renderCompactDashboard==='function')?renderCompactDashboard:null;
+  renderCompactDashboard=function(room,r){
+    if(r&&r.status==='picking'){
+      const idx=Number.isFinite(Number(r.winningIndex))?normIndex(r.winningIndex):indexForKey(r.pendingColorKey||r.colorKey||'yellow');
+      lockedIndex=idx; lockedRoundId=r.id||lockedRoundId;
+      const root=q('screenDashboard');
+      if(root){document.body.classList.add('bbStageMode');root.className='compactDashboard bbStageDashboard stageWheelV121';root.innerHTML=`<section class="bbWheelInlineV110 bbWheelInlineV121">${htmlWheel(idx)}</section>`;}
+      showIndex(idx);return;
+    }
+    if(r&&r.status!=='picking') hide();
+    return prevRender?prevRender(room,r):null;
+  };
+
+  let listening='';
+  function activeRoom(){return(currentRoomCode||new URLSearchParams(location.search).get('room')||localStorage.hb_player_room||localStorage.hb_host_room||'').toUpperCase();}
+  function attach(){
+    try{
+      if(!db)return; const room=activeRoom(); if(!room||room===listening)return;
+      if(listening)db.ref('rooms/'+listening+'/currentRound').off('value.bbWheelV121');
+      listening=room;
+      db.ref('rooms/'+room+'/currentRound').on('value.bbWheelV121',s=>{
+        const r=s.val()||{};
+        if(r.status==='picking'){
+          const idx=Number.isFinite(Number(r.winningIndex))?normIndex(r.winningIndex):indexForKey(r.pendingColorKey||r.colorKey||'yellow');
+          lockedIndex=idx; lockedRoundId=r.id||lockedRoundId; showIndex(idx);
+          if(q('hostPickerArea')) q('hostPickerArea').innerHTML=htmlWheel(idx);
+        } else if(r.status!=='picking') hide();
+      });
+    }catch(_e){}
+  }
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(attach,300));
+  setInterval(attach,700);
+})();

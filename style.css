@@ -6130,3 +6130,42 @@ body.playerMode .bbStageShell .bbStageLogo{display:none!important}
   72%{filter:blur(.28px)}
   100%{transform:rotate(calc(7200deg + var(--stop)));filter:blur(0)}
 }
+
+/* =========================
+   V121 - fixed 60-vaks showrad, zonder oude fallback-stijlen
+   ========================= */
+.bbWheelCardV121{
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  padding:clamp(8px,2.2vw,22px) !important;
+  gap:clamp(10px,2vh,18px) !important;
+}
+.bbWheelDiscV121{
+  width:min(84vw,62vh,570px) !important;
+  height:min(84vw,62vh,570px) !important;
+  animation:bbWheelSpinV121 16s cubic-bezier(.08,.78,.08,1) forwards !important;
+  border:clamp(8px,1.3vw,14px) solid rgba(255,255,255,.96) !important;
+  box-shadow:0 0 0 8px rgba(255,255,255,.08),0 0 42px color-mix(in srgb,var(--chosen) 65%,transparent),0 28px 90px rgba(0,0,0,.62),inset 0 0 34px rgba(0,0,0,.32) !important;
+}
+.bbWheelDiscV121::before{
+  background:repeating-conic-gradient(from -90deg,rgba(255,255,255,.38) 0 .65deg,transparent .65deg 6deg) !important;
+  mix-blend-mode:soft-light !important;
+}
+.bbWheelHubV121{
+  inset:39% !important;
+  background:radial-gradient(circle,rgba(255,255,255,.96) 0%,rgba(255,230,180,.94) 42%,rgba(30,20,10,.96) 100%) !important;
+  border:clamp(2px,.55vw,5px) solid rgba(255,255,255,.92) !important;
+  box-shadow:0 0 24px rgba(255,255,255,.35), inset 0 0 18px rgba(0,0,0,.25) !important;
+  color:transparent !important;
+  font-size:0 !important;
+}
+.bbWheelWaitV121{margin-top:clamp(10px,2vh,18px) !important;background:rgba(255,255,255,.075) !important;border:1px solid rgba(255,255,255,.12) !important;backdrop-filter:blur(8px) !important;}
+.bbWheelInlineV121{background:transparent !important;display:flex !important;align-items:center !important;justify-content:center !important;min-height:100% !important;}
+@keyframes bbWheelSpinV121{
+  0%{transform:rotate(0deg);filter:blur(.18px)}
+  12%{filter:blur(1.25px)}
+  42%{filter:blur(.75px)}
+  72%{filter:blur(.28px)}
+  100%{transform:rotate(calc(7200deg + var(--stop)));filter:blur(0)}
+}
