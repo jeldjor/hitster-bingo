@@ -3070,3 +3070,82 @@ function listenBingo(room){if(!room)return;db.ref("rooms/"+room+"/bingos").off()
     };
   }
 })();
+
+/* =========================
+   V116 - Categorietekst onder timer fix
+   - Onder de timer staat altijd alleen de categorienaam
+   - Geen automatische vraagzinnen meer tijdens pre-count of answering
+   ========================= */
+(function(){
+  const q = id => document.getElementById(id);
+  const E = s => (typeof esc === 'function' ? esc(String(s ?? '')) : String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])));
+  const HEX = {yellow:'#FFCC33', pink:'#00D4C7', purple:'#FF8A1F', blue:'#7ED957', green:'#FF5A5F', free:'#101716'};
+  function secondsLeft(r){
+    if(!r?.deadlineMs) return null;
+    return Math.max(0, Math.ceil((Number(r.deadlineMs)-Date.now())/1000));
+  }
+  function timerPct(r){
+    const left = secondsLeft(r);
+    const sec = Math.max(1, Number(r?.seconds)||20);
+    return left === null ? 100 : Math.max(0, Math.min(100, left / sec * 100));
+  }
+  function precountLeft(r){
+    const end = Number(r?.precountEndsAt || 0);
+    if(!end) return 0;
+    return Math.max(0, Math.ceil((end - Date.now())/1000));
+  }
+  function categoryLabel(r){
+    return String(r?.category || 'Categorie').trim() || 'Categorie';
+  }
+  function setStage(root, cls, html){
+    document.body.classList.add('bbStageMode');
+    root.className = 'compactDashboard bbStageDashboard ' + cls;
+    root.innerHTML = html;
+  }
+
+  const previousRenderV116 = typeof renderCompactDashboard === 'function' ? renderCompactDashboard : null;
+  renderCompactDashboard = function(room,r){
+    const root = q('screenDashboard');
+    if(!root) return previousRenderV116 ? previousRenderV116(room,r) : null;
+
+    if(r?.status === 'precount'){
+      const left = precountLeft(r);
+      const goText = left ? String(left) : 'GO';
+      setStage(root,'stagePrecount stageAnswer',`<section class="bbStageShell">
+        <img src="bb_logo.png" class="bbStageLogo mini" alt="Bingo Beats">
+        <div class="bbRoundBadge" style="--chosen:${HEX[r.colorKey]||'#FFCC33'}"><span></span>${E(r.colorName||'')} · ${E(categoryLabel(r))}</div>
+        <div class="bbPrecountBig" style="--chosen:${HEX[r.colorKey]||'#FFCC33'}"><span>${E(goText)}</span></div>
+        <h2 class="bbCategoryTitle">🎯 ${E(categoryLabel(r))}</h2>
+        <input class="bbStageInput" value="" placeholder="Maak je klaar..." autocomplete="off" disabled>
+        <button class="bbStageSubmit" disabled>${left ? 'START OVER '+left : 'START!'}</button>
+        <p class="bbStageSub">Het liedje start zo meteen.</p>
+      </section>`);
+      return;
+    }
+
+    if(r?.status === 'answering'){
+      const own = r?.id ? (room.answers?.[r.id]?.[currentPlayerId]) : null;
+      if(!own){
+        const left = secondsLeft(r);
+        setStage(root,'stageAnswer',`<section class="bbStageShell">
+          <img src="bb_logo.png" class="bbStageLogo mini" alt="Bingo Beats">
+          <div class="bbRoundBadge" style="--chosen:${HEX[r.colorKey]||'#FFCC33'}"><span></span>${E(r.colorName||'')} · ${E(categoryLabel(r))}</div>
+          <div class="bbCountdownBig" style="--pct:${timerPct(r)};--chosen:${HEX[r.colorKey]||'#FFCC33'}"><span>${left ?? ''}</span></div>
+          <h2 class="bbCategoryTitle">🎯 ${E(categoryLabel(r))}</h2>
+          <input id="bbStageAnswerInput" class="bbStageInput" value="" placeholder="Typ je antwoord..." autocomplete="off">
+          <button id="bbStageSubmitBtn" class="bbStageSubmit">VERSTUREN</button>
+        </section>`);
+        const inp = q('bbStageAnswerInput');
+        inp?.addEventListener('keydown', e=>{ if(e.key==='Enter') q('bbStageSubmitBtn')?.click(); });
+        q('bbStageSubmitBtn')?.addEventListener('click',()=>{
+          const v=(q('bbStageAnswerInput')?.value||'').trim();
+          if(!v) return alert('Vul eerst je antwoord in.');
+          if(typeof submitAnswerValue === 'function') submitAnswerValue(v);
+        });
+        setTimeout(()=>inp?.focus(),50);
+        return;
+      }
+    }
+    return previousRenderV116 ? previousRenderV116(room,r) : null;
+  };
+})();
