@@ -6002,3 +6002,74 @@ body.playerMode .bbStageShell .bbStageLogo{display:none!important}
 .bbRoundBadge.bbColorOnly{font-size:clamp(18px,5vw,28px)!important;justify-content:center!important}
 .bbCategoryTitle{margin-top:10px!important}
 .bbNoInnerLogo{padding-top:clamp(10px,3vh,26px)!important}
+
+/* =========================
+   V118 - Show Edition kleurenrad
+   - Geen tweede BB-logo in het rad
+   - Veel smalle kleurvakken door elkaar
+   - Minder donkere kaart, meer zwevend rad
+   - Langere spanningsanimatie
+   ========================= */
+#bbWheelFullOverlayV92{
+  background:
+    radial-gradient(circle at 50% 20%,rgba(255,204,51,.16),transparent 30%),
+    radial-gradient(circle at 18% 18%,rgba(0,212,199,.13),transparent 32%),
+    radial-gradient(circle at 82% 75%,rgba(255,90,95,.12),transparent 34%),
+    rgba(3,0,10,.86) !important;
+  backdrop-filter:blur(10px) !important;
+}
+.bbWheelFullCardV92.v118{
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  gap:clamp(10px,2vh,18px) !important;
+  padding:clamp(10px,2.4vw,24px) !important;
+}
+.bbWheelFullCardV92.v118 .bbWheelFullLogoV92,
+.bbWheelFullCardV92.v118 .bbWheelFullTitleV92,
+.bbWheelFullCardV92.v118 .bbWheelFullSubV92{
+  display:none !important;
+}
+.bbWheelFullDiscV92.bbWheelManySegmentsV118{
+  animation-duration:16s !important;
+  width:min(82vw,62vh,560px) !important;
+  height:min(82vw,62vh,560px) !important;
+  border:clamp(8px,1.3vw,14px) solid rgba(255,255,255,.96) !important;
+  box-shadow:
+    0 0 0 8px rgba(255,255,255,.08),
+    0 0 38px color-mix(in srgb,var(--chosen) 65%,transparent),
+    0 28px 90px rgba(0,0,0,.62),
+    inset 0 0 34px rgba(0,0,0,.32) !important;
+}
+.bbWheelFullDiscV92.bbWheelManySegmentsV118::before{
+  background:repeating-conic-gradient(from -90deg,rgba(255,255,255,.35) 0 0.8deg,transparent 0.8deg 7.2deg) !important;
+  mix-blend-mode:soft-light !important;
+}
+.bbWheelFullDiscV92.bbWheelManySegmentsV118 .seg{display:none!important;}
+.bbWheelFullPointerV92{
+  margin-bottom:calc(clamp(22px,4.5vw,42px) * -0.42) !important;
+  border-left:clamp(18px,4vw,34px) solid transparent !important;
+  border-right:clamp(18px,4vw,34px) solid transparent !important;
+  border-top:clamp(34px,6vw,62px) solid #fff !important;
+}
+.bbWheelFullWaitV92{
+  background:rgba(255,255,255,.08) !important;
+  border:1px solid rgba(255,255,255,.12) !important;
+  box-shadow:0 0 24px rgba(255,255,255,.08) !important;
+}
+@keyframes bbWheelFullSpinV92{
+  0%{transform:rotate(0deg);filter:blur(.15px)}
+  18%{filter:blur(1.25px)}
+  62%{filter:blur(.45px)}
+  86%{transform:rotate(calc(4350deg + var(--stop) - 18deg));filter:blur(0)}
+  94%{transform:rotate(calc(4350deg + var(--stop) + 5deg));filter:blur(0)}
+  100%{transform:rotate(calc(4350deg + var(--stop)));filter:blur(0)}
+}
+.bbWheelFullCardV92.result.v118{
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+}
+.bbWheelInlineV110{
+  background:radial-gradient(circle at 50% 20%,rgba(255,204,51,.12),transparent 34%),linear-gradient(180deg,#07030f,#100518) !important;
+}

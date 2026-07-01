@@ -2505,26 +2505,32 @@ function listenBingo(room){if(!room)return;db.ref("rooms/"+room+"/bingos").off()
   const HEXV = {yellow:'#FFCC33',pink:'#00D4C7',purple:'#FF8A1F',blue:'#7ED957',green:'#FF5A5F'};
   const NAMEV = {yellow:'GOUD',pink:'AQUA',purple:'ORANJE',blue:'LIME',green:'KORAAL'};
   const EMOJIV = {yellow:'🟡',pink:'🩵',purple:'🟠',blue:'🟢',green:'🔴'};
-  const STOPV = {yellow:0,pink:-72,purple:-144,blue:-216,green:-288};
+  const WHEEL_SEGMENTS_V118 = ['yellow','pink','purple','blue','green','purple','yellow','green','pink','blue','orange','yellow'];
+  const WHEEL_SEQUENCE_V118 = ['yellow','pink','purple','blue','green','pink','yellow','green','purple','blue','yellow','green','pink','purple','blue','green','yellow','purple','pink','blue','purple','green','yellow','blue','pink','yellow','purple','green','blue','pink','green','yellow','pink','blue','purple','yellow','green','purple','pink','blue','yellow','purple','green','pink','blue','green','pink','yellow','purple','blue'];
+  function wheelStopForKeyV118(key){
+    const count = WHEEL_SEQUENCE_V118.length;
+    const slice = 360 / count;
+    const indices = WHEEL_SEQUENCE_V118.map((k,i)=>k===key?i:-1).filter(i=>i>=0);
+    const chosenIndex = indices.length ? indices[Math.floor(indices.length/2)] : 0;
+    const centerAngle = chosenIndex * slice + slice/2;
+    return -(centerAngle);
+  }
+  function wheelGradientV118(){
+    const count = WHEEL_SEQUENCE_V118.length;
+    const slice = 360 / count;
+    return 'conic-gradient(from -90deg,' + WHEEL_SEQUENCE_V118.map((k,i)=>`${HEXV[k]||'#FFCC33'} ${ (i*slice).toFixed(2) }deg ${ ((i+1)*slice).toFixed(2) }deg`).join(',') + ')';
+  }
   let autoStartBusyV110 = false;
   let lastAutoKeyV110 = '';
 
   function wheelHTMLV110(key){
-    const stop = STOPV[key] ?? 0;
-    return `<div class="bbWheelFullCardV92 v110" data-key="${E(key)}">
-      <img src="bb_logo.png" class="bbWheelFullLogoV92" alt="Bingo Beats">
-      <div class="bbWheelFullTitleV92">Kleurenrad</div>
-      <div class="bbWheelFullSubV92">Welke categorie wordt het?</div>
+    const stop = wheelStopForKeyV118(key || 'yellow');
+    return `<div class="bbWheelFullCardV92 v110 v118" data-key="${E(key)}">
       <div class="bbWheelFullPointerV92"></div>
-      <div class="bbWheelFullDiscV92" style="--stop:${stop}deg;--chosen:${HEXV[key]||'#FFCC33'}">
+      <div class="bbWheelFullDiscV92 bbWheelManySegmentsV118" style="--stop:${stop}deg;--chosen:${HEXV[key]||'#FFCC33'};background:${wheelGradientV118()}">
         <div class="bbWheelFullCenterV92">BB</div>
-        <span class="seg seg1">GOUD</span>
-        <span class="seg seg2">AQUA</span>
-        <span class="seg seg3">ORANJE</span>
-        <span class="seg seg4">LIME</span>
-        <span class="seg seg5">KORAAL</span>
       </div>
-      <div class="bbWheelFullWaitV92">Spanning opbouwen...</div>
+      <div class="bbWheelFullWaitV92">Categorie wordt gekozen...</div>
     </div>`;
   }
   function resultHTMLV110(color,cat){
@@ -2532,9 +2538,7 @@ function listenBingo(room){if(!room)return;db.ref("rooms/"+room+"/bingos").off()
     const name = color?.name || NAMEV[key] || 'KLEUR';
     const emoji = color?.emoji || EMOJIV[key] || '';
     const hex = color?.hex || HEXV[key] || '#FFCC33';
-    return `<div class="bbWheelFullCardV92 result v110" style="--result:${hex}">
-      <img src="bb_logo.png" class="bbWheelFullLogoV92" alt="Bingo Beats">
-      <div class="bbWheelFullSubV92">De categorie is</div>
+    return `<div class="bbWheelFullCardV92 result v110 v118" style="--result:${hex}">
       <div class="bbWheelFullResultDotV92"></div>
       <div class="bbWheelFullResultNameV92">${E(emoji)} ${E(name)}</div>
       <div class="bbWheelFullResultCatV92">${E(cat||'')}</div>
@@ -2617,7 +2621,7 @@ function listenBingo(room){if(!room)return;db.ref("rooms/"+room+"/bingos").off()
             if(typeof playHidden === 'function') playHidden();
           },3000);
         });
-      },9000);
+      },16000);
     };
   }
 
