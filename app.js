@@ -2134,12 +2134,17 @@ function listenBingo(room){if(!room)return;db.ref("rooms/"+room+"/bingos").off()
   }
   function animateCarousel(card,targetIndex){
     const track=card.querySelector('.bbCarouselTrackV131');
-    const seg=card.querySelector('.bbCarouselSegV131');
-    if(!track||!seg)return;
-    const segW=seg.getBoundingClientRect().width||32;
-    const windowW=card.querySelector('.bbCarouselWindowV131')?.getBoundingClientRect().width||window.innerWidth;
-    const end=(windowW/2)-((targetIndex+0.5)*segW);
-    const start=80;
+    const win=card.querySelector('.bbCarouselWindowV131');
+    if(!track||!win)return;
+    // BELANGRIJK: niet rekenen met alleen segment-breedte, want CSS heeft margin/gap.
+    // We pakken het echte doelvakje uit de DOM en zetten het midden daarvan exact onder de witte lijn.
+    const targetEl=track.querySelector(`.bbCarouselSegV131[data-i="${targetIndex}"]`) || track.children[targetIndex];
+    if(!targetEl)return;
+    const winW=win.getBoundingClientRect().width||window.innerWidth;
+    const targetCenter=targetEl.offsetLeft + (targetEl.offsetWidth/2);
+    const end=(winW/2)-targetCenter;
+    const start=Math.min(140, winW/4);
+    track.style.transform=`translate3d(${start}px,0,0)`;
     const t0=performance.now();
     function frame(now){
       const t=Math.min(1,(now-t0)/INTRO_MS);
