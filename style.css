@@ -5996,3 +5996,9 @@ input, textarea, select{font-size:max(16px, 1em);}
 .stageAnswer .bbCountdownBig{
   box-shadow:0 0 38px var(--chosen, rgba(255,204,51,.35))!important;
 }
+
+/* V117 - cleaner player screens: max 1 BB-logo and category only once */
+body.playerMode .bbStageShell .bbStageLogo{display:none!important}
+.bbRoundBadge.bbColorOnly{font-size:clamp(18px,5vw,28px)!important;justify-content:center!important}
+.bbCategoryTitle{margin-top:10px!important}
+.bbNoInnerLogo{padding-top:clamp(10px,3vh,26px)!important}

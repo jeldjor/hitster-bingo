@@ -3149,3 +3149,139 @@ function listenBingo(room){if(!room)return;db.ref("rooms/"+room+"/bingos").off()
     return previousRenderV116 ? previousRenderV116(room,r) : null;
   };
 })();
+
+/* =========================
+   V117 - Categorie UI + Jury + Clean Host
+   - Spelerscherm: boven alleen kleur, categorienaam alleen onder timer
+   - Maximaal 1 BB-logo: stage-logo's verborgen
+   - Categorie-specifieke Jury van Bingo Beats
+   - Nieuwe kamer/nieuw spel maakt hostscore schoon
+   ========================= */
+(function(){
+  const q=id=>document.getElementById(id);
+  const E=s=>(typeof esc==='function'?esc(String(s??'')):String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])));
+  const HEX={yellow:'#FFCC33',pink:'#00D4C7',purple:'#FF8A1F',blue:'#7ED957',green:'#FF5A5F',free:'#101716'};
+  function catLabel(r){return String(r?.category||'Categorie').trim()||'Categorie'}
+  function secondsLeft117(r){if(!r?.deadlineMs)return null;return Math.max(0,Math.ceil((Number(r.deadlineMs)-Date.now())/1000))}
+  function timerPct117(r){const left=secondsLeft117(r),sec=Math.max(1,Number(r?.seconds)||20);return left===null?100:Math.max(0,Math.min(100,left/sec*100))}
+  function precountLeft117(r){const end=Number(r?.precountEndsAt||0);return end?Math.max(0,Math.ceil((end-Date.now())/1000)):0}
+  function setStage117(root,cls,html){document.body.classList.add('bbStageMode');root.className='compactDashboard bbStageDashboard '+cls;root.innerHTML=html}
+
+  // Oude vraagzinnen uitschakelen: overal waar oude code nog vraagt, gewoon categorienaam teruggeven.
+  window.bbCategoryLabelV117=catLabel;
+  try{ if(typeof questionForCategoryV93==='function') questionForCategoryV93=function(cat){return String(cat||'Categorie')}; }catch(e){}
+  try{ if(typeof categoryQuestion==='function') categoryQuestion=function(cat){return String(cat||'Categorie')}; }catch(e){}
+  try{ if(typeof questionFor==='function') questionFor=function(cat){return String(cat||'Categorie')}; }catch(e){}
+
+  const prevRender117=typeof renderCompactDashboard==='function'?renderCompactDashboard:null;
+  renderCompactDashboard=function(room,r){
+    const root=q('screenDashboard');
+    if(!root) return prevRender117?prevRender117(room,r):null;
+
+    if(r?.status==='precount'){
+      const left=precountLeft117(r),goText=left?String(left):'GO';
+      setStage117(root,'stagePrecount stageAnswer',`<section class="bbStageShell bbNoInnerLogo">
+        <div class="bbRoundBadge bbColorOnly" style="--chosen:${HEX[r.colorKey]||'#FFCC33'}"><span></span>${E(r.colorName||'KLEUR')}</div>
+        <div class="bbPrecountBig" style="--chosen:${HEX[r.colorKey]||'#FFCC33'}"><span>${E(goText)}</span></div>
+        <h2 class="bbCategoryTitle">🎯 ${E(catLabel(r))}</h2>
+        <input class="bbStageInput" value="" placeholder="Maak je klaar..." autocomplete="off" disabled>
+        <button class="bbStageSubmit" disabled>${left?'START OVER '+left:'START!'}</button>
+        <p class="bbStageSub">Het liedje start zo meteen.</p>
+      </section>`);
+      return;
+    }
+
+    if(r?.status==='answering'){
+      const own=r?.id?(room.answers?.[r.id]?.[currentPlayerId]):null;
+      if(!own){
+        const left=secondsLeft117(r);
+        setStage117(root,'stageAnswer',`<section class="bbStageShell bbNoInnerLogo">
+          <div class="bbRoundBadge bbColorOnly" style="--chosen:${HEX[r.colorKey]||'#FFCC33'}"><span></span>${E(r.colorName||'KLEUR')}</div>
+          <div class="bbCountdownBig" style="--pct:${timerPct117(r)};--chosen:${HEX[r.colorKey]||'#FFCC33'}"><span>${left??''}</span></div>
+          <h2 class="bbCategoryTitle">🎯 ${E(catLabel(r))}</h2>
+          <input id="bbStageAnswerInput" class="bbStageInput" value="" placeholder="Typ je antwoord..." autocomplete="off">
+          <button id="bbStageSubmitBtn" class="bbStageSubmit">VERSTUREN</button>
+        </section>`);
+        const inp=q('bbStageAnswerInput');
+        inp?.addEventListener('keydown',e=>{if(e.key==='Enter')q('bbStageSubmitBtn')?.click()});
+        q('bbStageSubmitBtn')?.addEventListener('click',()=>{const v=(q('bbStageAnswerInput')?.value||'').trim();if(!v)return alert('Vul eerst je antwoord in.');if(typeof submitAnswerValue==='function')submitAnswerValue(v)});
+        setTimeout(()=>inp?.focus(),50);
+        return;
+      }
+    }
+    return prevRender117?prevRender117(room,r):null;
+  };
+
+  function cleanHostUi117(){
+    try{['hostAnswerArea','hostScoreboard','hostRoundInfo','hostBingoMessage'].forEach(id=>{const el=q(id);if(el)el.innerHTML=''})}catch(e){}
+    try{q('hostScorePanel')?.classList.add('hidden');q('hostBingoPanel')?.classList.add('hidden')}catch(e){}
+    try{if(q('hostPickerArea'))q('hostPickerArea').innerHTML='🎮<br>Klaar om te spelen'}catch(e){}
+    try{if(q('hostStatus'))q('hostStatus').textContent='Nieuwe start. Maak of hervat een kamer.'}catch(e){}
+  }
+  window.bbCleanHostUi117=cleanHostUi117;
+  document.addEventListener('click',e=>{if(e.target?.id==='newRoomBtn'||e.target?.id==='confirmNewGameBtn'||e.target?.id==='newGameBtn')cleanHostUi117()},true);
+
+  // ===== Jury van Bingo Beats V117 =====
+  const STOP=new Set(['the','de','het','een','a','an','of','van']);
+  const WORDNUM={zero:'0',one:'1',two:'2',three:'3',four:'4',five:'5',six:'6',seven:'7',eight:'8',nine:'9',ten:'10',eleven:'11',twelve:'12'};
+  function stripMixInfo(s){
+    s=String(s||'');
+    s=s.replace(/\s*[\(\[][^\)\]]*(radio\s*edit|edit|remix|mix|live|extended|acoustic|instrumental|remaster|version|club|single)[^\)\]]*[\)\]]/ig,'');
+    s=s.replace(/\s*[-–—]\s*.*\b(radio\s*edit|edit|remix|mix|live|extended|acoustic|instrumental|remaster|version|club|single)\b.*$/ig,'');
+    s=s.replace(/\s+(feat\.?|ft\.?|featuring)\s+.*$/ig,'');
+    return s.trim();
+  }
+  function baseNorm117(s){
+    s=stripMixInfo(s).toLowerCase();
+    s=s.replace(/&/g,' and ');
+    Object.entries(WORDNUM).forEach(([w,n])=>{s=s.replace(new RegExp('\\b'+w+'\\b','g'),n)});
+    return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+  }
+  function tokens117(s){const b=baseNorm117(s);return b?b.split(' ').filter(Boolean):[]}
+  function coreTokens117(s){return tokens117(s).filter(w=>!STOP.has(w))}
+  function lev117(a,b){a=String(a||'');b=String(b||'');const m=a.length,n=b.length,dp=Array.from({length:m+1},()=>Array(n+1).fill(0));for(let i=0;i<=m;i++)dp[i][0]=i;for(let j=0;j<=n;j++)dp[0][j]=j;for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return dp[m][n]}
+  function sim117(a,b){a=baseNorm117(a);b=baseNorm117(b);if(!a&&!b)return 1;if(!a||!b)return 0;const m=Math.max(a.length,b.length);return 1-lev117(a,b)/m}
+  function wordClose117(a,b){a=baseNorm117(a);b=baseNorm117(b);if(a===b)return true;if(!a||!b)return false;if((a==='i'&&b==='it')||(a==='it'&&b==='i'))return true;const d=lev117(a,b),m=Math.max(a.length,b.length);if(m<=4)return d<=1;if(m<=7)return d<=2;return d<=3||(1-d/m)>=0.72}
+  function cover117(correct,given){const used=new Array(given.length).fill(false);let hit=0;for(const cw of correct){let best=-1,score=-999;for(let i=0;i<given.length;i++){if(used[i])continue;const gw=given[i];let sc=cw===gw?100:(wordClose117(cw,gw)?80-lev117(cw,gw):-100);if(sc>score){score=sc;best=i}}if(best>=0&&score>0){used[best]=true;hit++}}return{hit,total:correct.length,missing:Math.max(0,correct.length-hit)}}
+  function parseYear117(v){const s=String(v||'').toLowerCase().replace(/[’']/g,'');let m=s.match(/\b(19\d{2}|20\d{2})\b/);if(m)return Number(m[1]);m=s.match(/\b(\d{2})\b/);if(m){const n=Number(m[1]);return n<=35?2000+n:1900+n}return null}
+  function decade117(y){y=Number(y);return y?Math.floor(y/10)*10:null}
+  function parseDecade117(v){const s=String(v||'').toLowerCase();if(/nineties/.test(s))return 1990;if(/eighties/.test(s))return 1980;if(/seventies/.test(s))return 1970;if(/sixties/.test(s))return 1960;if(/\b00s\b|jaren\s*00|\b00\b/.test(s))return 2000;if(/\b10s\b|jaren\s*10|\b10\b/.test(s))return 2010;if(/\b20s\b|jaren\s*20|\b20\b/.test(s))return 2020;let m=s.match(/\b(60|70|80|90)\s*(s|'s)?\b/);if(m)return 1900+Number(m[1]);const y=parseYear117(s);return y?decade117(y):null}
+  function kind117(cat){const c=String(cat||'').toLowerCase();if((c.includes('voor')&&c.includes('na'))||c.includes('2001'))return'beforeafter';if(c.includes('decennium')||c.includes('decade'))return'decade';if(c.includes('jaartal')||c.includes('jaar')||c.includes('+/-')||c.includes('±'))return'year';if(c.includes('artiest')||c.includes('artist'))return'artist';return'title'}
+  function correct117(kind,ans){ans=ans||{};if(kind==='beforeafter'){const y=parseYear117(ans.year);return y&&y<2001?'voor':'na'}if(kind==='artist')return ans.artist||'';if(kind==='year'||kind==='decade')return ans.year||'';return ans.track||''}
+  function judge117(r,answer){
+    const kind=kind117(r?.category), corr=correct117(kind,r?.correctAnswer||{}), raw=String(answer||'').trim();
+    if(!raw)return{good:false,review:false,reason:'Geen antwoord',kind,correct:corr};
+    if(kind==='beforeafter'){
+      const g=baseNorm117(raw);let val='';if(['voor','ervoor','before'].includes(g))val='voor';if(['na','erna','after'].includes(g))val='na';return{good:val===corr,review:false,reason:val?(val===corr?'Voor/na klopt':'Voor/na klopt niet'):'Antwoord moet voor of na zijn',kind,correct:corr};
+    }
+    if(kind==='year'){
+      const cy=parseYear117(corr),gy=parseYear117(raw);const ok=!!cy&&!!gy&&Math.abs(cy-gy)<=2;return{good:ok,review:false,reason:ok?'Binnen marge':'Buiten marge',kind,correct:corr};
+    }
+    if(kind==='decade'){
+      const cd=decade117(parseYear117(corr)),gd=parseDecade117(raw);const ok=!!cd&&cd===gd;return{good:ok,review:false,reason:ok?'Zelfde decennium':'Ander decennium',kind,correct:corr};
+    }
+    const c=baseNorm117(corr),g=baseNorm117(raw);
+    if(c&&g&&c===g)return{good:true,review:false,reason:'Exact genoeg',kind,correct:corr};
+    if(sim117(corr,raw)>=0.78)return{good:true,review:false,reason:'Duidelijk bedoeld',kind,correct:corr};
+    const allC=tokens117(corr),allG=tokens117(raw),ct=coreTokens117(corr),gt=coreTokens117(raw);
+    if(!ct.length)return{good:false,review:false,reason:'Geen juist antwoord beschikbaar',kind,correct:corr};
+    const cov=cover117(ct,gt),ratio=cov.hit/ct.length;
+    if(kind==='title'&&ct.length===1&&gt.length===1&&cov.missing===0&&allC.length>=3&&allG.length<=1)return{good:false,review:true,reason:'Antwoord lijkt onvolledig',kind,correct:corr};
+    if(cov.missing===0)return{good:true,review:false,reason:'Alle belangrijke woorden herkend',kind,correct:corr};
+    if(kind==='title'&&ct.length>=3&&cov.missing===1&&ratio>=0.66)return{good:false,review:true,reason:'Belangrijk woord ontbreekt',kind,correct:corr};
+    if(kind==='title'&&ct.length===2&&cov.hit===1&&gt.length===1)return{good:false,review:true,reason:'Antwoord lijkt onvolledig',kind,correct:corr};
+    if(kind==='artist'&&sim117(corr,raw)>=0.68&&gt.length>=1)return{good:true,review:false,reason:'Artiest duidelijk bedoeld',kind,correct:corr};
+    return{good:false,review:false,reason:'Onvoldoende herkenbaar',kind,correct:corr};
+  }
+  window.bbJudgeOneV117=judge117;
+  async function runJury117(roomCode,forceStatus){
+    const snap=await db.ref('rooms/'+roomCode).once('value');const room=snap.val()||{},r=room.currentRound||{};if(!r.id||!r.correctAnswer)return{reviews:[],room,r};
+    const ans=room.answers?.[r.id]||{},players=room.players||{},up={},reviews=[];
+    Object.keys(players).forEach(pid=>{const text=ans[pid]?.answer||'';const j=judge117(r,text);up[`rooms/${roomCode}/correct/${r.id}/${pid}`]=j.review?'review':!!j.good;up[`rooms/${roomCode}/juryMeta/${r.id}/${pid}`]={kind:j.kind,reason:j.reason,correct:j.correct,answer:text,review:!!j.review};if(j.review)reviews.push(pid)});
+    up[`rooms/${roomCode}/currentRound/juryDone`]=true;up[`rooms/${roomCode}/currentRound/reviewList`]=reviews;up[`rooms/${roomCode}/currentRound/reviewIndex`]=0;if(forceStatus)up[`rooms/${roomCode}/currentRound/status`]=reviews.length?'review':forceStatus;await db.ref().update(up);return{reviews,room,r};
+  }
+  window.bbRunJuryV117=runJury117;
+  lockRound=function(){
+    if(!currentRoomCode)return;publishAnswer().then(()=>runJury117(currentRoomCode,null)).then(res=>{const has=!!res?.reviews?.length;return db.ref('rooms/'+currentRoomCode+'/currentRound').update({status:'locked'}).then(()=>setTimeout(()=>db.ref('rooms/'+currentRoomCode+'/currentRound').update({status:has?'review':'judged'}),2200))}).then(()=>{if(q('hostStatus'))q('hostStatus').textContent='Jury van Bingo Beats heeft de antwoorden beoordeeld.'}).catch(e=>alert('Jury/timer fout: '+(e.message||e)))};
+  publishResults=function(){if(!currentRoomCode)return;runJury117(currentRoomCode,'judged').then(()=>{if(q('hostStatus'))q('hostStatus').textContent='Jury-scorebord verzonden.'})};
+})();
