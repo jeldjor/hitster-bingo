@@ -254,6 +254,7 @@
   }
   function startSameRoom(){
     try{
+      
       if(typeof bbStartNewGameSameRoom === "function"){
         bbStartNewGameSameRoom();
         return;
@@ -274,6 +275,7 @@
     if(modal) modal.onclick = function(e){ if(e.target === modal) closeModal(); };
   }
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
+    
   else bind();
   setTimeout(bind, 500);
   setTimeout(bind, 1500);
@@ -282,3 +284,7 @@
 
 </body>
 </html>
+
+
+
+
